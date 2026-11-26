@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#11131a">
+  <title>FloxZert — студия анимации и графики</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="FloxZert">
+        <span class="brand-mark">f<span>.</span></span>
+        <span class="brand-name">FloxZert</span>
+        <span class="brand-divider"></span>
+        <button class="project-name" id="projectSwitcher" type="button">Лесные истории <span class="chevron">⌄</span></button>
+      </a>
+      <nav class="main-menu" aria-label="Главное меню">
+        <button id="importImageButton">Файл</button><button>Правка</button><button>Изображение</button><button>Слой</button><button>Анимация</button><button>Окно</button>
+      </nav>
+      <div class="top-actions">
+        <span class="save-status" id="saveStatus"><i></i> Подключение к хранилищу…</span>
+        <button class="icon-button" id="historyButton" title="История версий" aria-label="История версий">◷</button>
+        <button class="share-button">Поделиться</button>
+        <button class="share-button" id="downloadProject" title="Сохранить проект .flosk в установленном приложении">Сохранить .flosk</button>
+        <button class="export-button" id="exportTop">Экспорт <span>↗</span></button>
+        <button class="support-button" id="openSupport" title="Техподдержка и справка">Справка</button>
+        <button class="support-button" id="openSocial" title="Проекты, друзья и совместная работа">Сообщество</button>
+        <button class="avatar" aria-label="Профиль">А</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside class="tool-rail" aria-label="Инструменты">
+        <div class="tool-group">
+          <button class="tool active" data-tool="select" title="Перемещение (V)"><span>↖</span></button>
+          <button class="tool" data-tool="brush" title="Кисть (B)"><span>✎</span></button>
+          <button class="tool" data-tool="pencil" title="Карандаш (N)"><span>⌁</span></button>
+          <button class="tool" data-tool="eraser" title="Ластик (E)"><span>◩</span></button>
+          <button class="tool" data-tool="fill" title="Заливка (G)"><span>▰</span></button>
+          <button class="tool" data-tool="line" title="Линия (L)"><span>／</span></button>
+          <button class="tool" data-tool="rect" title="Прямоугольник (R)"><span>□</span></button>
+          <button class="tool" data-tool="roundrect" title="Скруглённый прямоугольник"><span>▢</span></button>
+          <button class="tool" data-tool="ellipse" title="Эллипс"><span>◯</span></button>
+          <button class="tool" data-tool="triangle" title="Треугольник"><span>△</span></button>
+          <button class="tool" data-tool="polygon" title="Многоугольник"><span>⬡</span></button>
+          <button class="tool" data-tool="star" title="Звезда"><span>☆</span></button>
+          <button class="tool" data-tool="text" title="Текст (T)"><span>T</span></button>
+        </div>
+        <div class="rail-divider"></div>
+        <div class="tool-group">
+          <button class="tool" data-tool="lasso" title="Свободное лассо: обведите объект. Shift — добавить, Alt — вычесть, Ctrl/Cmd — переключить"><span>⌒</span></button>
+          <button class="tool" data-tool="magic" title="Быстрое выделение"><span>✧</span></button>
+          <button class="tool" data-tool="blur" title="Размытие"><span>◌</span></button>
+          <button class="tool" data-tool="eyedropper" title="Пипетка"><span>◉</span></button>
+        </div>
+        <div class="rail-spacer"></div>
+        <button class="tool settings-tool" id="settingsButton" title="Настройки"><span>⚙</span></button>
+        <div class="color-tool-wrapper">
+          <button class="color-picker-button" id="colorPickerButton" type="button" aria-expanded="false" aria-label="Цвета: обводка, заливка и тень" title="Цвета обводки, заливки и тени">
+            <span class="color-picker-mark">◉</span><span>Цвета</span>
+          </button>
+          <div class="color-popover hidden" id="colorPopover">
+            <strong>Цвета объектов</strong>
+            <div class="color-tabs" role="tablist" aria-label="Тип цвета">
+              <button type="button" class="selected" data-color-tab="stroke">Обводка</button>
+              <button type="button" data-color-tab="fill">Заливка</button>
+              <button type="button" data-color-tab="shadow">Тень</button>
+            </div>
+            <label class="color-choice" data-color-view="stroke">Цвет обводки<input id="strokeColor" type="color" value="#f0a36b"></label>
+            <label class="color-choice hidden" data-color-view="fill">Цвет заливки<input id="fillColor" type="color" value="#f0a36b"></label>
+            <div class="color-choice hidden" data-color-view="shadow">
+              <label>Цвет тени<input id="shadowColor" type="color" value="#20202a"></label>
+              <label class="shadow-toggle"><input id="shadowEnabled" type="checkbox"> Включить тень</label>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <section class="center-column">
+        <div class="contextbar">
+          <div class="tool-context">
+            <span class="context-label" id="activeToolLabel">Перемещение</span>
+            <span class="context-separator"></span>
+            <label class="compact-control">Размер <input id="brushSize" type="number" min="1" max="80" value="8"><span>px</span></label>
+            <label class="compact-control">Непрозрачность <input id="opacity" type="range" min="5" max="100" value="100"><b id="opacityValue">100%</b></label>
+            <label class="compact-control hidden" id="strokeWidthContextControl" title="Толщина обводки выделенного объекта">Обводка <input id="strokeWidthContext" type="number" min="0" max="80" value="4"><span>px</span></label>
+            <label class="check-control"><input type="checkbox" id="fillEnabled" checked> Заливка</label>
+            <button class="context-button" id="strokeStyleButton">Обводка <span>⌄</span></button>
+          </div>
+          <div class="canvas-actions">
+            <button class="mobile-properties-button" id="mobileProperties" title="Показать свойства">Свойства</button>
+            <button class="icon-button" id="undoButton" title="Отменить">↶</button>
+            <button class="icon-button" id="redoButton" title="Повторить">↷</button>
+            <span class="context-separator"></span>
+            <button class="grid-button" id="gridToggle" title="Показать/скрыть сетку" aria-pressed="false">▦ Сетка</button>
+            <label class="grid-snap-control" title="Привязывать рисование, перемещение и изменение размера объектов к сетке; видимость сетки настраивается отдельно"><input type="checkbox" id="gridSnap"> Привязка</label>
+            <select id="gridSize" title="Размер клетки сетки" aria-label="Размер клетки сетки"><option value="50">50 px</option><option value="100" selected>100 px</option><option value="200">200 px</option><option value="400">400 px</option></select>
+            <label class="quality-control" title="Качество экранного предпросмотра">Качество
+              <select id="previewQuality" aria-label="Качество предпросмотра"><option value="draft">Скорость</option><option value="balanced" selected>Обычное</option><option value="high">Высокое</option></select>
+            </label>
+          </div>
+        </div>
+
+        <div class="canvas-stage" id="canvasStage">
+          <div class="canvas-wrap" id="canvasWrap">
+            <canvas id="artboard" width="1920" height="1200" aria-label="Холст"></canvas>
+            <div class="artboard-caption"><span class="live-dot"></span> Сцена 01 <span>·</span> 1920 × 1200</div>
+          </div>
+          <div class="canvas-floating-controls">
+            <div class="rotation-controls" aria-label="Поворот выделения">
+              <span>Поворот</span><button id="rotateLeft" title="Повернуть влево на 15°" aria-label="Повернуть влево на 15 градусов">⟲</button><button id="rotateRight" title="Повернуть вправо на 15°" aria-label="Повернуть вправо на 15 градусов">⟳</button>
+            </div>
+            <div class="zoom-controls">
+              <button class="zoom-action" id="zoomOut" title="Уменьшить масштаб">−</button><button class="zoom-value" id="zoomValue" title="Текущий масштаб">100%</button><button class="zoom-action" id="zoomIn" title="Увеличить масштаб до 800%">+</button><button class="icon-button" id="fitCanvas" title="Сбросить масштаб и перемещение">⛶</button>
+            </div>
+          </div>
+          <div class="floating-hint" id="canvasHint">Выберите инструмент и начните творить <kbd>?</kbd></div>
+        </div>
+
+        <section class="timeline">
+          <div class="timeline-top">
+            <div class="timeline-title"><span class="panel-icon">▤</span><strong>Таймлайн</strong><span class="timeline-project">Сцена 01</span></div>
+            <div class="playback">
+              <button id="firstFrame" title="Первый кадр">|◀</button>
+              <button id="prevFrame" title="Предыдущий кадр">◀</button>
+              <button class="play-button" id="playButton" title="Воспроизвести">▶</button>
+              <button id="nextFrame" title="Следующий кадр">▶</button>
+              <button id="lastFrame" title="Последний кадр">▶|</button>
+              <span class="fps-control"><input id="timelineFps" type="number" min="1" max="60" value="12" aria-label="Частота кадров"><small>FPS</small></span>
+            </div>
+            <div class="timeline-tools">
+              <button id="onionButton" class="mini-chip" title="Onion skinning">◉ Onion</button>
+              <button id="createMotionTween" title="Создать линейный tween для выделенного объекта">Motion tween</button>
+              <label class="tween-duration">Длительность <input id="tweenDuration" type="number" min="2" max="500" value="12" aria-label="Длительность motion tween в кадрах"></label>
+              <button id="addLayerKeyframe" title="Добавить ключевой кадр активного слоя">◆</button>
+              <button id="addBlankKeyframe" title="Добавить пустой ключевой кадр активного слоя">◇</button>
+              <button id="clearLayerFrame" title="Удалить содержимое текущего кадра активного слоя">⌫</button>
+              <button id="addFrame" title="Добавить кадр">＋ Кадр</button>
+              <button id="copyFrame" title="Копировать кадр">▣</button>
+              <select id="tweenEasing" aria-label="Кривая easing" title="Кривая motion tween"><option value="linear">Linear</option><option value="ease-in">Ease in</option><option value="ease-out">Ease out</option><option value="ease-in-out">Ease in/out</option></select>
+              <button id="addFrameMarker" title="Добавить маркер кадра">⚑</button>
+            </div>
+          </div>
+          <div class="timeline-options">
+            <label>Onion
+              <select id="onionMode"><option value="off">Выкл.</option><option value="normal">Обычный</option><option value="outline">Контур</option><option value="tinted">Тонированный</option></select>
+            </label>
+            <label>Кадры <input id="onionFrames" type="number" min="1" max="12" value="2"></label>
+            <label>Loop <input id="loopEnabled" type="checkbox" checked></label>
+            <label>От <input id="loopStart" type="number" min="1" value="1"></label>
+            <label>До <input id="loopEnd" type="number" min="1" value="12"></label>
+            <label>Скорость
+              <select id="playbackSpeed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select>
+            </label>
+          </div>
+          <div class="timeline-body">
+            <div class="timeline-layer-list">
+              <div class="timeline-layer-heading"><span>СЛОИ</span><button id="addLayer" title="Добавить новый слой">＋ Слой</button></div>
+              <div id="timelineLayerNames"></div>
+            </div>
+            <div class="frames-scroll" id="framesScroll">
+              <div class="frame-ruler" id="frameRuler"></div>
+              <div class="frame-rows" id="frameRows"></div>
+            </div>
+          </div>
+          <div class="timeline-foot"><span>Кадр <b id="currentFrameLabel">1</b> из <span id="frameCountLabel">12</span></span><span class="timeline-foot-right">Длительность <b>1.0 c</b> <span class="foot-divider"></span> <button id="newScene">＋ Новая сцена</button></span></div>
+        </section>
+      </section>
+
+      <aside class="properties-panel">
+        <div class="panel-tabs">
+          <button class="panel-tab active" data-panel="properties">Свойства</button>
+          <button class="panel-tab" data-panel="layers">Слои</button>
+          <button class="panel-tab" data-panel="assets">Библиотека</button>
+        </div>
+        <div class="panel-content" id="propertiesView">
+          <div class="panel-section document-section">
+            <div class="section-title"><span>Документ</span><button>⋯</button></div>
+            <div class="document-card">
+              <div class="document-thumb"><span>f.</span></div>
+              <div><strong id="documentProjectName">Лесные истории</strong><small>FloxZert · локальный проект</small></div>
+            </div>
+            <div class="dimension-row">
+              <label>Ширина<input value="1920" aria-label="Ширина документа"></label>
+              <span>×</span>
+              <label>Высота<input value="1200" aria-label="Высота документа"></label>
+            </div>
+            <div class="dimension-row compact-row"><label>Частота кадров <input value="12 FPS"></label><label>Фон <input id="backgroundColor" type="color" value="#fbfaf7"></label></div>
+            <div class="frame-quality-setting"><label for="frameQuality">Пиксели PNG-кадра</label><select id="frameQuality" aria-label="Масштаб пикселей кадра PNG"><option value="1">1×</option><option value="2">2×</option><option value="3">3×</option><option value="4">4×</option></select><small id="frameQualityValue">1920 × 1200 px</small></div>
+          </div>
+          <div class="panel-section">
+            <div class="section-title"><span>Инструмент</span><span class="tiny-badge" id="toolBadge">MOVE</span></div>
+            <div class="property-row"><span>Заливка</span><label class="switch"><input type="checkbox" id="panelFill" checked><span></span></label></div>
+            <p class="color-help">Нажмите «Цвета» слева, чтобы выбрать обводку, заливку или тень.</p>
+            <div class="property-row"><span>Градиент для новых фигур</span><label class="switch"><input type="checkbox" id="gradientEnabled"><span></span></label></div>
+            <div class="property-row"><span>Тип градиента</span><select id="gradientType"><option value="linear">Линейный</option><option value="radial">Радиальный</option></select></div>
+            <div class="property-row"><span>Угол</span><div class="value-input"><input id="gradientAngle" type="number" min="-360" max="360" value="0"><small>°</small></div></div>
+            <div id="gradientStops" class="gradient-stops"></div>
+            <div class="quick-actions"><button id="addGradientStop" type="button">＋ Стоп</button><button id="applyGradient" type="button">Применить к выделенному</button></div>
+            <div class="quick-actions"><button id="removeGradient" type="button">Убрать градиент</button></div>
+            <div class="property-row"><span>Толщина обводки</span><div class="value-input"><input id="strokeWidth" type="number" min="0" max="80" value="4"><small>px</small></div></div>
+            <div class="property-row"><span>Скругление углов</span><div class="value-input"><input id="cornerRadius" type="number" min="0" max="300" value="18" disabled><small>px</small></div></div>
+            <div class="property-row"><span>Стиль обводки</span><select id="strokeStyle"><option value="solid">Сплошная</option><option value="dashed">Пунктирная</option><option value="dotted">Точечная</option></select></div>
+            <div class="property-row"><span>Непрозрачность</span><div class="range-value"><input type="range" id="objectOpacity" min="0" max="100" value="100"><small id="objectOpacityValue">100%</small></div></div>
+            <div class="property-row hidden" id="blurSettings"><label for="blurRadius">Радиус размытия</label><div class="value-input"><input id="blurRadius" type="number" min="1" max="80" value="8"><small>px</small></div></div>
+            <div class="property-row"><span>Режим кисти</span><select id="brushMode"><option value="normal">Обычный</option><option disabled>Внутри линий — в разработке</option><option disabled>Снаружи линий — в разработке</option></select></div>
+            <div class="property-row"><span>Нажим пера</span><label class="switch"><input type="checkbox" id="pressure"><span></span></label></div>
+          </div>
+          <div class="panel-section quick-actions-section">
+            <div class="section-title"><span>Быстрые действия</span></div>
+            <div class="quick-actions">
+              <button id="removeFill"><span>◒</span> Удалить заливку</button>
+              <button id="removeStroke"><span>⌿</span> Удалить обводку</button>
+            </div>
+            <div class="boolean-row"><button data-boolean="union" title="Объединить">◩</button><button data-boolean="subtract" title="Вычесть">◧</button><button data-boolean="intersect" title="Пересечь">◫</button><small>Булевы операции</small></div>
+          </div>
+          <div class="panel-section selection-section">
+            <div class="section-title"><span>Выделение</span><button id="invertSelection">Инвертировать</button></div>
+            <div class="selection-actions"><button>＋ Добавить</button><button>− Вычесть</button><button>⌁ Растушёвка</button></div>
+            <div class="property-row"><span>Сохранить в канал</span><button class="text-action" id="saveSelection">Сохранить</button></div>
+          </div>
+        </div>
+        <div class="panel-content hidden" id="layersView">
+          <div class="section-title layers-heading"><span>Слои проекта</span><button id="layerAddPanel">＋ Слой</button></div>
+          <p class="layer-help">Нажмите слой, чтобы выбрать его. ✎ — переименовать; перетащите ряд, чтобы изменить порядок.</p>
+          <div id="layerList" class="layer-list"></div>
+          <div class="panel-section">
+            <div class="property-row"><span>Непрозрачность слоя</span><div class="range-value"><input type="range" id="layerOpacity" min="0" max="100" value="100" aria-label="Непрозрачность активного слоя"><small id="layerOpacityValue">100%</small></div></div>
+          </div>
+          <div class="layer-footer"><button id="groupLayers">▱ Создать группу</button><button id="addMask">◩ Добавить маску</button></div>
+        </div>
+        <div class="panel-content hidden" id="assetsView">
+          <div class="section-title layers-heading"><span>Библиотека деталей</span><button id="saveAsset" title="Сохранить выделенные объекты">＋</button></div>
+          <p class="muted-copy">Выделите один или несколько объектов и сохраните их набором. Нажмите элемент библиотеки, чтобы добавить его на холст.</p>
+          <label class="asset-name-field">Название в библиотеке<input id="assetNameInput" type="text" maxlength="80" placeholder="Например, персонаж"></label>
+          <div id="assetList" class="layer-list asset-list"><div class="empty-assets"><span>✦</span><strong>Пока пусто</strong><small>Выделите объекты и нажмите «Сохранить»</small></div></div>
+          <button class="wide-button" id="saveCurrentAsset">＋ Сохранить выделенные объекты</button>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="statusbar"><span><i class="status-dot"></i> Рабочая область готова</span><span id="storageStatus">Проверка хранилища…</span><span class="status-right">FloxZert Studio <b>●</b></span></footer>
+  </div>
+
+  <div class="modal-backdrop hidden" id="welcomeModal">
+    <section class="welcome-modal" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle">
+      <div class="welcome-mark">f.</div>
+      <span class="eyebrow">ПЕРВЫЙ ЗАПУСК</span>
+      <h2 id="welcomeTitle">Добро пожаловать в FloxZert</h2>
+      <div id="welcomeContent">
+        <p>Начните с гостевого режима или создайте локальный профиль. Аккаунт и проекты сохраняются на этом устройстве.</p>
+        <div class="welcome-actions">
+          <button type="button" id="continueGuest" class="export-button">Продолжить как гостю</button>
+          <button type="button" id="openLocalAccount" class="wide-button">Создать локальный профиль</button>
+        </div>
+      </div>
+      <div id="tourPanel" class="tour-panel hidden">
+        <div class="tour-progress"><span id="tourProgressText">Шаг 1 из 5</span><div><i id="tourProgressBar"></i></div></div>
+        <h3 id="tourTitle">Инструменты</h3>
+        <p id="tourDescription"></p>
+        <div class="welcome-actions">
+          <button type="button" id="tourBack" class="wide-button">Назад</button>
+          <button type="button" id="tourNext" class="export-button">Далее</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop hidden" id="settingsModal">
+    <section class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <div class="modal-header"><div><span class="eyebrow">ПЕРСОНАЛИЗАЦИЯ</span><h2 id="settingsTitle">Настройки FloxZert</h2></div><button id="closeSettings" class="close-button">×</button></div>
+      <div class="settings-nav"><button class="selected" data-settings-tab="features">Дополнительные функции</button><button data-settings-tab="themes">Темы и интерфейс</button><button data-settings-tab="account">Аккаунт и облако</button><button data-settings-tab="learning">Обучение</button><button data-settings-tab="shortcuts">Горячие клавиши</button><button data-settings-tab="assistant">ИИ-ассистент</button></div>
+      <div class="settings-body" id="settingsBody">
+        <div class="settings-intro"><div class="sparkle">✦</div><div><h3>Дополнительные функции</h3><p>Флаги сохраняются в проекте, но не включают модули, которые ещё не реализованы. Ассистент может переключать флаги по названию функции.</p></div></div>
+        <section class="smoothing-card" aria-labelledby="smoothingTitle">
+          <div class="smoothing-heading"><div><h3 id="smoothingTitle">Сглаживание линий и распознавание фигур</h3><p>ИИ Flox распознаёт линии, дуги, круги и прямоугольники прямо в браузере — без локального сервера, интернета или внешнего API. Это встроенный геометрический распознаватель, не генеративная чат-модель. Остальные режимы сглаживают свободные штрихи.</p></div><button id="straightenButton" type="button">Выпрямить выделенное</button></div>
+          <div class="smoothing-controls">
+            <label class="smoothing-toggle"><input id="smoothingEnabled" type="checkbox"> Пассивно исправлять новые линии</label>
+            <label>Режим
+              <select id="smoothingMode">
+                <option value="off">Выкл.</option><option value="manual">По кнопке</option><option value="light">Лёгкое сглаживание</option><option value="strong">Сильное сглаживание</option>
+                <option value="geometry">Идеальная геометрия</option><option value="curves">Только дуги</option><option value="straight">Только прямые</option><option value="auto">Умное (авто)</option><option value="flox_ai">ИИ Flox · распознавание фигур</option>
+              </select>
+            </label>
+            <label>Чувствительность <span id="smoothingSensitivityValue">50%</span>
+              <input id="smoothingSensitivity" type="range" min="0" max="100" value="50">
+            </label>
+            <label>Порог дрожания <span id="smoothingJitterValue">6 px</span>
+              <input id="smoothingJitter" type="range" min="1" max="30" value="6">
+            </label>
+          </div>
+        </section>
+        <div class="feature-catalog-toolbar"><input id="featureSearch" type="search" placeholder="Найти модуль или функцию…"><span id="featureCount"></span></div>
+        <div id="featureCatalog" class="feature-catalog"></div>
+        <div class="feature-grid" id="legacyFeatureGrid">
+          <label class="feature-card"><span class="feature-icon">◈</span><span><b>Расширенное выделение</b><small>Флаг настроек · модуль в разработке</small></span><input type="checkbox" data-feature="advanced_selection"></label>
+          <label class="feature-card"><span class="feature-icon">✧</span><span><b>Смарт-фильтры и эффекты</b><small>Флаг настроек · модуль в разработке</small></span><input type="checkbox" data-feature="smart_filters"></label>
+          <label class="feature-card"><span class="feature-icon">⌘</span><span><b>Скрипты и командная строка</b><small>Используйте текущую Python CLI отдельно</small></span><input type="checkbox" data-feature="scripts"></label>
+          <label class="feature-card"><span class="feature-icon">◉</span><span><b>Векторные инструменты</b><small>Флаг настроек · модуль в разработке</small></span><input type="checkbox" data-feature="vector_tools"></label>
+          <label class="feature-card"><span class="feature-icon">▧</span><span><b>Анимация и tweening</b><small>Покадровый таймлайн доступен; tweening — нет</small></span><input type="checkbox" data-feature="tweening"></label>
+          <label class="feature-card"><span class="feature-icon">◌</span><span><b>Продвинутые эффекты</b><small>Флаг настроек · модуль в разработке</small></span><input type="checkbox" data-feature="advanced_effects"></label>
+          <label class="feature-card"><span class="feature-icon">☁</span><span><b>Облачная библиотека</b><small>Флаг настроек · облачная синхронизация не настроена</small></span><input type="checkbox" data-feature="cloud_library"></label>
+          <label class="feature-card"><span class="feature-icon">▣</span><span><b>Дополнительные форматы экспорта</b><small>Сейчас доступны PNG из редактора и SVG из CLI</small></span><input type="checkbox" data-feature="advanced_export"></label>
+        </div>
+        <div class="ai-settings-note"><span>✦</span> ИИ может менять эти настройки по вашей команде. <button id="openAssistant">Открыть ассистента →</button></div>
+      </div>
+      <div class="settings-body hidden" id="themesView">
+        <div class="settings-intro"><div class="sparkle">◐</div><div><h3>Темы интерфейса</h3><p>Синяя база, светлый режим и пользовательские цвета сохраняются локально.</p></div></div>
+        <div class="theme-grid">
+          <button type="button" class="theme-card" data-theme="blue"><span class="theme-preview blue-preview"></span><b>Flox Blue</b><small>Основная синяя тема</small></button>
+          <button type="button" class="theme-card" data-theme="dark"><span class="theme-preview dark-preview"></span><b>Тёмная</b><small>Низкая яркость панелей</small></button>
+          <button type="button" class="theme-card" data-theme="light"><span class="theme-preview light-preview"></span><b>Светлая</b><small>Высокая контрастность холста</small></button>
+          <button type="button" class="theme-card" data-theme="custom"><span class="theme-preview custom-preview"></span><b>Настраиваемая</b><small>Свои цвета интерфейса</small></button>
+        </div>
+        <div class="theme-controls">
+          <label>Акцентный цвет <input id="themeAccent" type="color" value="#3897f0"></label>
+          <label>Фон интерфейса <input id="themeBackground" type="color" value="#111722"></label>
+          <label>Цвет панелей <input id="themePanel" type="color" value="#1a2230"></label>
+        </div>
+      </div>
+      <div class="settings-body hidden" id="accountView">
+        <div class="settings-intro"><div class="sparkle">☁</div><div><h3>Аккаунт и синхронизация</h3><p>Войдите, чтобы синхронизировать проекты между веб-версией и desktop. Пароль проверяется сервером, а CAPTCHA показывается только в веб-версии.</p></div></div>
+        <form id="accountForm" class="account-form">
+          <label class="avatar-field" id="accountAvatarField">Аватар
+            <span class="account-avatar" id="accountAvatarPreview">A</span>
+            <input id="accountAvatar" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+            <button type="button" id="chooseAccountAvatar" class="wide-button">Выбрать изображение</button>
+          </label>
+          <label>Email <input id="accountEmail" type="email" autocomplete="email" required placeholder="name@example.com"></label>
+          <label id="accountNameField">Имя <input id="accountName" type="text" autocomplete="name" maxlength="80" placeholder="Имя профиля"></label>
+          <label id="accountPasswordField">Пароль <input id="accountPassword" type="password" minlength="10" maxlength="128" autocomplete="new-password" placeholder="Минимум 10 символов"></label>
+          <label id="accountPasswordConfirmField">Повторите пароль <input id="accountPasswordConfirm" type="password" minlength="10" maxlength="128" autocomplete="new-password" placeholder="Повторите пароль"></label>
+          <label>Язык <select id="accountLanguage"><option value="ru">Русский</option><option value="en">English</option></select></label>
+          <label>Часовой пояс <select id="accountTimezone"></select></label>
+          <label id="accountPlanField">Тариф
+            <select id="accountPlan">
+              <option value="free">Бесплатный · 100 ИИ-токенов в день</option>
+              <option value="creator">Creator · 500 ИИ-токенов в день</option>
+              <option value="team">Team · 2 000 ИИ-токенов в день</option>
+            </select>
+          </label>
+          <label class="account-consent" id="accountConsentField"><input id="accountConsent" type="checkbox"> Я принимаю условия использования и политику конфиденциальности</label>
+          <div class="account-captcha hidden" id="accountCaptcha"></div>
+          <button type="submit" class="wide-button" id="accountSubmit">Создать аккаунт</button>
+          <button type="button" class="wide-button account-mode-toggle" id="accountModeToggle">Уже есть аккаунт? Войти</button>
+          <button type="button" class="wide-button hidden" id="accountLogout">Выйти из аккаунта</button>
+        </form>
+        <div class="provider-grid">
+          <button type="button" class="provider-button" disabled>Google · не настроен</button>
+          <button type="button" class="provider-button" disabled>GitHub · не настроен</button>
+          <button type="button" class="provider-button" disabled>Apple · не настроен</button>
+        </div>
+        <div class="account-mode-hint" id="accountModeHint"></div>
+        <div class="account-status" id="accountStatus">Режим гостя · облачная синхронизация отключена</div>
+      </div>
+      <div class="settings-body hidden" id="learningView">
+        <div class="settings-intro"><div class="sparkle">i</div><div><h3>Обучение и справка</h3><p>Интерактивные шаги, шаблоны, челленджи и чек-лист первых действий.</p></div></div>
+        <div id="learningChecklist" class="learning-list"></div>
+        <button type="button" id="restartGuide" class="wide-button">Повторить приветственный гайд</button>
+      </div>
+      <div class="shortcuts-view hidden" id="shortcutsView">
+        <div class="settings-intro"><div class="sparkle">⌘</div><div><h3>Горячие клавиши</h3><p>Ищите действие по названию или сочетанию. Включайте и выключайте назначения, не теряя их; для пользовательских действий задавайте режим и контекст.</p></div></div>
+        <div class="shortcut-toolbar"><input id="shortcutSearch" type="search" placeholder="Поиск по названию действия или сочетанию…" autocomplete="off"><span id="shortcutCount" class="shortcut-count" aria-live="polite"></span><button type="button" id="enableShortcuts">Включить доступные</button><button type="button" id="exportShortcutProfile">Экспорт профиля</button><button type="button" id="importShortcutProfile">Импорт профиля</button><input id="shortcutProfileFile" type="file" accept="application/json,.json" hidden><button type="button" id="resetShortcuts">Сбросить</button></div>
+        <div class="shortcut-list" id="shortcutList" role="list"></div>
+        <div class="shortcut-help">Настройте режим «Нажатие», «Удержание» (0,4 с), «Двойное» (повтор за 0,35 с) или «Долгое» (0,9 с), а также контекст: «Везде», «Холст», «Таймлайн» или «ИИ». Кнопка «Включить доступные» включает назначения с проверкой конфликтов. Системные [SYSTEM] нельзя выключить, но режим и контекст можно настроить. Можно назначить до 1000 сочетаний на весь каталог; сочетания привязаны к доступным командам редактора, а не к функциям, которые ещё не реализованы. Импорт профиля проверяет неизвестные действия, недопустимые клавиши и конфликты. На Mac используйте ⌘ вместо Ctrl; зарезервированные сочетания ОС не назначаются.</div>
+      </div>
+      <div class="modal-footer"><span>Настройки сохраняются автоматически</span><button class="export-button" id="doneSettings">Готово</button></div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop hidden" id="supportModal">
+    <section class="support-modal" role="dialog" aria-modal="true" aria-labelledby="supportTitle">
+      <div class="modal-header"><div><span class="eyebrow">СПРАВКА И ПОДДЕРЖКА</span><h2 id="supportTitle">Помощь по FloxZert</h2></div><button id="closeSupport" class="close-button" aria-label="Закрыть">×</button></div>
+      <div class="support-layout">
+        <aside class="support-sidebar">
+          <button type="button" class="support-tab selected" data-support-tab="faq">FAQ</button>
+          <button type="button" class="support-tab" data-support-tab="ticket">Обратиться</button>
+          <button type="button" class="support-tab" data-support-tab="tickets">Мои обращения</button>
+          <button type="button" class="support-tab" data-support-tab="diagnostic">Диагностика</button>
+        </aside>
+        <div class="support-content">
+          <section data-support-view="faq">
+            <h3>Частые вопросы</h3>
+            <details open><summary>Где хранится проект?</summary><p>В браузерной версии проект сохраняется в хранилище этого браузера на устройстве. Статический сайт можно разместить на GitHub Pages или другом хостинге без собственного backend. Облачные проекты и история версий требуют отдельно размещённого API; desktop-приложение хранит проекты в SQLite.</p></details>
+            <details><summary>Как сохранить проект перед экспортом?</summary><p>Используйте Ctrl+S или дождитесь сообщения «Все изменения сохранены». В desktop-приложении сохраните проект как .flosk; в веб-версии доступны импорт .flosk и экспорт PNG/SVG.</p></details>
+            <details><summary>Почему закрылись вкладки или пропала синхронизация?</summary><p>Сейчас облачная синхронизация не настроена. Локальные данные остаются доступными в текущем профиле и SQLite.</p></details>
+            <details><summary>Связаться с техподдержкой</summary><p>Напишите на <a href="mailto:pycode.support@gmail.com">pycode.support@gmail.com</a> или создайте обращение во вкладке «Обратиться».</p></details>
+          </section>
+          <section data-support-view="ticket" class="hidden">
+            <h3>Создать обращение</h3>
+            <form id="supportForm" class="support-form">
+              <label>Имя отправителя (необязательно) <input id="supportName" name="name" maxlength="100"></label>
+              <label>Получатель (изменить нельзя) <input id="supportRecipient" type="email" value="pycode.support@gmail.com" readonly aria-readonly="true"></label>
+              <label>Категория
+                <select id="supportCategory" name="category">
+                  <option value="project">Проект и сохранение</option><option value="export">Экспорт</option><option value="render">Рендер и производительность</option>
+                  <option value="account">Аккаунт</option><option value="billing">Оплата и тариф</option><option value="bug">Ошибка приложения</option><option value="other">Другое</option>
+                </select>
+              </label>
+              <label>Тема <input id="supportSubject" name="subject" minlength="3" maxlength="160" required></label>
+              <label>Описание <textarea id="supportMessage" name="message" minlength="10" maxlength="8000" rows="5" required></textarea></label>
+              <label class="support-attach"><input id="supportIncludeDiagnostic" type="checkbox" checked> Добавить техническую диагностику (версия, ОС, размер холста, статус API)</label>
+              <button type="submit" class="export-button">Создать обращение</button>
+            </form>
+            <div id="supportTicketResult" class="support-ticket-result"></div>
+          </section>
+          <section data-support-view="tickets" class="hidden">
+            <div class="support-section-heading"><h3>Мои обращения на сервере</h3><button type="button" id="refreshSupportTickets">Обновить</button></div>
+            <div id="supportTicketList" class="support-ticket-list">Нет загруженных обращений</div>
+          </section>
+          <section data-support-view="diagnostic" class="hidden">
+            <h3>Техническая диагностика</h3>
+            <pre id="supportDiagnostic" class="support-diagnostic"></pre>
+            <button type="button" id="copySupportDiagnostic" class="wide-button">Скопировать диагностику</button>
+          </section>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop hidden" id="socialModal">
+    <section class="social-modal" role="dialog" aria-modal="true" aria-labelledby="socialTitle">
+      <div class="modal-header"><div><span class="eyebrow">СООБЩЕСТВО</span><h2 id="socialTitle">Проекты и друзья</h2></div><button id="closeSocial" class="close-button" aria-label="Закрыть">×</button></div>
+      <div class="social-layout">
+        <aside class="social-sidebar">
+          <button type="button" class="social-tab selected" data-social-tab="projects">Главный экран</button>
+          <button type="button" class="social-tab" data-social-tab="friends">Друзья</button>
+          <button type="button" class="social-tab" data-social-tab="toolbox">Общий тулбокс</button>
+        </aside>
+        <div class="social-content">
+          <section data-social-view="projects">
+            <div class="support-section-heading"><h3>Мои и общие проекты</h3><button type="button" id="socialNewProject">Новый проект</button></div>
+            <div id="socialProjectList" class="social-list">Загрузка проектов…</div>
+          </section>
+          <section data-social-view="friends" class="hidden">
+            <div class="friend-search">
+              <input id="friendEmail" type="email" placeholder="Email друга">
+              <button type="button" id="sendFriendRequest">Добавить друга</button>
+            </div>
+            <div id="friendList" class="social-list">Загрузка друзей…</div>
+          </section>
+          <section data-social-view="toolbox" class="hidden">
+            <div class="support-section-heading"><h3>Тулбокс аккаунта</h3><button type="button" id="addToolboxFromSelection">Сохранить выделение</button></div>
+            <div id="toolboxList" class="social-list">Загрузка тулбокса…</div>
+          </section>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop hidden" id="managerModal">
+    <section class="manager-modal" role="dialog" aria-modal="true" aria-labelledby="managerTitle">
+      <div class="modal-header"><div><span class="eyebrow">ПРОЕКТЫ И ВЕРСИИ</span><h2 id="managerTitle">Управление</h2></div><button id="closeManager" class="close-button" aria-label="Закрыть">×</button></div>
+      <div class="manager-body" id="managerBody"></div>
+    </section>
+  </div>
+
+  <div id="canvasContextMenu" class="canvas-context-menu hidden" role="menu" aria-label="Контекстное меню холста">
+    <div class="context-object-actions">
+      <button type="button" role="menuitem" data-context-action="copy"><span>Копировать</span><kbd>Ctrl+C</kbd></button>
+      <button type="button" role="menuitem" data-context-action="cut"><span>Вырезать</span><kbd>Ctrl+X</kbd></button>
+      <button type="button" role="menuitem" data-context-action="paste"><span>Вставить</span><kbd>Ctrl+V</kbd></button>
+      <button type="button" role="menuitem" data-context-action="duplicate"><span>Дублировать</span><kbd>Ctrl+D</kbd></button>
+      <button type="button" role="menuitem" data-context-action="group"><span>Сгруппировать</span><span class="context-icon">▣</span></button>
+      <button type="button" role="menuitem" data-context-action="ungroup"><span>Разгруппировать</span><span class="context-icon">▢</span></button>
+      <div class="context-divider"></div>
+      <button type="button" role="menuitem" data-context-action="motion-tween"><span>Motion tween</span><span class="context-icon">↗</span></button>
+      <button type="button" role="menuitem" data-context-action="keyframe"><span>Создать ключевой кадр</span><kbd>K</kbd></button>
+      <button type="button" role="menuitem" data-context-action="blank-keyframe"><span>Пустой ключевой кадр</span><kbd>F7</kbd></button>
+      <div class="context-divider"></div>
+      <button type="button" role="menuitem" data-context-action="front"><span>На передний план</span><kbd>Ctrl+]</kbd></button>
+      <button type="button" role="menuitem" data-context-action="forward"><span>Вперед на один уровень</span><kbd>]</kbd></button>
+      <button type="button" role="menuitem" data-context-action="backward"><span>Назад на один уровень</span><kbd>[</kbd></button>
+      <button type="button" role="menuitem" data-context-action="back"><span>На задний план</span><kbd>Ctrl+[</kbd></button>
+      <div class="context-divider"></div>
+      <button type="button" role="menuitem" data-context-action="toggle-fill"><span>Включить/выключить заливку</span><kbd>Shift+F</kbd></button>
+      <button type="button" role="menuitem" data-context-action="remove-fill"><span>Удалить заливку</span><kbd>Alt+F</kbd></button>
+      <button type="button" role="menuitem" data-context-action="toggle-stroke"><span>Включить/выключить обводку</span><kbd>Shift+K</kbd></button>
+      <button type="button" role="menuitem" data-context-action="remove-stroke"><span>Удалить обводку</span><kbd>Alt+K</kbd></button>
+      <div class="context-divider"></div>
+      <button type="button" role="menuitem" data-context-action="lock"><span>Заблокировать объект</span><kbd>Ctrl+L</kbd></button>
+      <button type="button" role="menuitem" data-context-action="toolbox"><span>Сохранить в тулбокс</span><span class="context-icon">＋</span></button>
+      <div class="context-divider"></div>
+      <button type="button" role="menuitem" class="context-danger" data-context-action="delete"><span>Удалить</span><kbd>Delete</kbd></button>
+    </div>
+    <div class="context-empty-actions">
+      <button type="button" role="menuitem" data-context-action="paste"><span>Вставить</span><kbd>Ctrl+V</kbd></button>
+      <button type="button" role="menuitem" data-context-action="select-all"><span>Выделить всё кадра</span><kbd>Ctrl+A</kbd></button>
+      <button type="button" role="menuitem" data-context-action="keyframe"><span>Создать ключевой кадр</span><kbd>K</kbd></button>
+      <button type="button" role="menuitem" data-context-action="blank-keyframe"><span>Пустой ключевой кадр</span><kbd>F7</kbd></button>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="paletteModal">
+    <section class="palette-modal" role="dialog" aria-modal="true" aria-label="Командная палитра">
+      <input id="paletteSearch" type="search" placeholder="Поиск команды…" autocomplete="off">
+      <div id="paletteResults" class="palette-results"></div>
+      <div class="palette-foot">↑ ↓ выбрать <kbd>Enter</kbd> выполнить <kbd>Esc</kbd> закрыть</div>
+    </section>
+  </div>
+
+  <aside class="assistant-panel hidden" id="assistantPanel">
+    <div class="assistant-header"><span class="assistant-avatar">f.</span><div><b>Flox Zert</b><small id="assistantModelLabel">Flox Mini · 0.1.0.1</small></div><button type="button" id="aiSettingsToggle" aria-label="Настройки модели" title="Настройки модели">⚙</button><button id="closeAssistant" aria-label="Закрыть чат">×</button></div>
+    <div id="desktopAiInstallPanel" class="desktop-ai-install hidden" aria-live="polite">
+      <button type="button" id="installLocalAi">Загрузить ИИ (~2,3 ГБ)</button>
+      <small id="desktopAiStatus">Первое скачивание модели (~2,3 ГБ) требует интернет; после этого Flox работает офлайн.</small>
+    </div>
+    <div id="aiProviderFields" class="assistant-provider hidden">
+      <label>Провайдер<select id="aiProviderMode"><option value="flox-mini">Flox Mini · 0.1.0.1</option><option value="flox">Flox · 0.1.0.1</option><option value="gemini">Google Gemini</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic Claude</option><option value="deepseek">DeepSeek</option><option value="custom">Другой OpenAI-совместимый</option></select></label>
+      <label>Модель<select id="aiProviderModel"></select><input id="aiCustomModel" class="hidden" placeholder="model-id"></label>
+      <input id="aiProviderKey" type="password" autocomplete="off" placeholder="API-ключ провайдера">
+      <input id="aiProviderEndpoint" class="hidden" type="url" placeholder="https://api.example.com/v1/chat/completions">
+      <label>Лимит ответа<select id="aiMaxOutputTokens"><option value="512">512 токенов</option><option value="1200" selected>1 200 токенов</option><option value="2048">2 048 токенов</option><option value="4096">4 096 токенов</option><option value="8192">8 192 токена</option><option value="10000">10 000 токенов</option></select></label>
+      <label>Память одобренных примеров<select id="aiMemoryLimit"><option value="150000">150 000 токенов</option><option value="500000">500 000 токенов</option><option value="1000000" disabled>1 млн · подписка (пока недоступна)</option></select></label>
+      <label class="ai-consent-option"><input id="aiIncludeApprovedMemory" type="checkbox"> Передавать одобренные примеры облачной модели</label>
+      <label class="ai-consent-option"><input id="aiFloxUseGemini" type="checkbox"> Использовать Gemini как движок Flox (отправляются запросы и холст)</label>
+      <label class="ai-consent-option"><input id="aiSendCanvas" type="checkbox" checked> Передавать снимок холста выбранной облачной модели</label>
+      <label id="aiFloxGeminiModelLabel">Модель Gemini для Flox<select id="aiFloxGeminiModel"><option value="gemini-2.5-flash">gemini-2.5-flash</option><option value="gemini-2.5-pro">gemini-2.5-pro</option></select></label>
+      <small id="aiVisionNotice">Облачная vision-модель может получить уменьшенный снимок текущего кадра. Flox Mini/Flox локально видят только структуру холста.</small>
+      <div class="ai-settings-actions"><button type="button" id="saveAiProvider">Сохранить</button><button type="button" id="approveLastAssistant">Запомнить ответ</button></div>
+      <small id="assistantLearningStatus">Память заполняется только после явного сохранения ответа.</small>
+      <small id="aiModelStatus">Локальный Flox Zert · 0.1.0.1</small>
+    </div>
+    <div class="assistant-messages" id="assistantMessages"><div class="assistant-message">Привет! Я Flox Mini 0.1.0.1. Могу изучить контекст холста и предложить безопасные правки.</div></div>
+    <form class="assistant-input" id="assistantForm"><input id="assistantPrompt" placeholder="Напишите сообщение..." autocomplete="off"><button aria-label="Отправить">↑</button></form>
+  </aside>
+  <input type="file" id="imageImport" accept=".flosk,.flox,.json,application/json,image/*" hidden>
+  <script src="feature_catalog.js"></script>
+  <script src="cloud-config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
