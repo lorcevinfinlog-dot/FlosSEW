@@ -7,7 +7,7 @@
   const turnstileSiteKey=typeof floxConfig.turnstileSiteKey==='string'?floxConfig.turnstileSiteKey.trim():'';
   const nativeFetch=window.fetch.bind(window);
   window.fetch=(input,init={})=>{
-    if(typeof input==='string'&&cloudApiBase&&/^\/api\/(auth(?:\/|$)|projects(?:\/|$)|preferences(?:\/|$))/.test(input)){
+    if(typeof input==='string'&&cloudApiBase&&/^\/api\/(auth(?:\/|$)|projects(?:\/|$)|preferences(?:\/|$)|multiplayer(?:\/|$))/.test(input)){
       const headers=new Headers(init.headers||{}),token=localStorage.getItem('floxzert-cloud-token');
       if(token)headers.set('Authorization',`Bearer ${token}`);
       return nativeFetch(`${cloudApiBase}${input}`,{...init,headers});
@@ -15,24 +15,59 @@
     return nativeFetch(input,init)
   };
   const OAUTH_NAMES={google:'Google',github:'GitHub',apple:'Apple'};
-  let oauthReturnMessage='';
-  (()=>{
-    if(!/oauth_(token|error)=/.test(location.hash))return;
-    const params=new URLSearchParams(location.hash.slice(1)),expected=sessionStorage.getItem('floxzert-oauth-state');
-    sessionStorage.removeItem('floxzert-oauth-state');
-    history.replaceState(null,'',location.pathname+location.search);
-    if(params.get('oauth_error')){oauthReturnMessage=`Вход не выполнен: ${params.get('oauth_error').slice(0,200)}`;return}
-    const token=params.get('oauth_token');
-    if(!token||!expected||params.get('state')!==expected){oauthReturnMessage='Вход отклонён: не совпал код проверки. Попробуйте ещё раз.';return}
-    localStorage.setItem('floxzert-cloud-token',token);
-    localStorage.setItem('floxzert-guest','false');
-    oauthReturnMessage=`Вход через ${OAUTH_NAMES[params.get('provider')]||'внешний сервис'} выполнен`;
-  })();
+  let oauthReturnMessage='',oauthReturnPromise=Promise.resolve();
+  function consumeOAuthCallback(hash,fromDesktop=false){
+    const rawHash=String(hash||'').replace(/^#/,'');
+    if(!/oauth_(code|error)=/.test(rawHash))return Promise.resolve();
+    const params=new URLSearchParams(rawHash);
+    const stateStorage=desktopLocalAI||fromDesktop?localStorage:sessionStorage;
+    const expected=stateStorage.getItem('floxzert-oauth-state');
+    stateStorage.removeItem('floxzert-oauth-state');
+    if(!fromDesktop)history.replaceState(null,'',location.pathname+location.search);
+    if(!expected||params.get('state')!==expected){
+      oauthReturnMessage='Вход отклонён: не совпал код проверки. Попробуйте ещё раз.';
+      return Promise.resolve()
+    }
+    if(params.get('oauth_error')){
+      const errors={provider_denied:'Вход отменён у провайдера.',provider_unavailable:'Этот способ входа ещё не настроен на сервере.',provider_failed:'Провайдер не подтвердил вход. Проверьте его настройки и попробуйте снова.'};
+      oauthReturnMessage=errors[params.get('oauth_error')]||'Вход не выполнен. Попробуйте ещё раз.';
+      return Promise.resolve()
+    }
+    const code=params.get('oauth_code'),state=params.get('state');
+    if(!code||!cloudApiBase){
+      oauthReturnMessage='Вход не выполнен: сервер авторизации недоступен.';
+      return Promise.resolve()
+    }
+    return (async()=>{
+      const response=await nativeFetch(`${cloudApiBase}/api/auth/oauth/exchange`,{
+        method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,state})
+      });
+      const result=await response.json();
+      if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);
+      if(!result.token||!result.user)throw new Error('Сервер не подтвердил вход');
+      localStorage.setItem('floxzert-cloud-token',result.token);
+      localStorage.setItem('floxzert-cloud-expires-at',String(result.expires_at||''));
+      localStorage.setItem('floxzert-account',JSON.stringify(result.user));
+      localStorage.setItem('floxzert-guest','false');
+      $('accountEmail').value=result.user.email||'';
+      $('accountName').value=result.user.name||'';
+      setAccountMode('login');
+      $('accountLogout').classList.remove('hidden');
+      $('accountStatus').textContent=`Вход выполнен: ${result.user.name||result.user.email} · облачная синхронизация включена`;
+      enterAccount();
+      updateAiAccess();
+      oauthReturnMessage=`Вход через ${OAUTH_NAMES[params.get('provider')]||'внешний сервис'} выполнен`;
+    })().catch(error=>{
+      console.error('OAuth exchange failed',error);
+      oauthReturnMessage=`Вход не выполнен: ${error.message||'не удалось создать сессию'}`;
+    })
+  }
   const labels = {select:'Перемещение',brush:'Кисть',pencil:'Карандаш',eraser:'Ластик',fill:'Заливка',line:'Линия',rect:'Прямоугольник',roundrect:'Скруглённый прямоугольник',ellipse:'Эллипс',triangle:'Треугольник',polygon:'Многоугольник',star:'Звезда',text:'Текст',lasso:'Свободное лассо',magic:'Быстрое выделение',blur:'Размытие',eyedropper:'Пипетка'};
   const AI_MODELS={'flox-mini':['Flox Mini 0.1.0.1'],flox:['Flox 0.1.0.1'],floxzert:['Flox Mini 0.1.0.1'],gemini:['gemini-2.5-flash','gemini-2.5-pro'],openai:['gpt-4o-mini','gpt-4.1-mini','gpt-4o'],anthropic:['claude-haiku-4-5','claude-sonnet-4-5'],deepseek:['deepseek-chat','deepseek-reasoner'],custom:['custom']};
   const AI_PROVIDER_NAMES={'flox-mini':'Flox Mini',flox:'Flox',floxzert:'Flox Mini',gemini:'Gemini',openai:'OpenAI',anthropic:'Anthropic',deepseek:'DeepSeek',custom:'OpenAI-compatible'};
   const desktopLocalAI=window.floxDesktop?.isDesktop===true;
   const localDevelopmentHost=['localhost','127.0.0.1','::1'].includes(location.hostname);
+  if(desktopLocalAI&&$('desktopDownloadButton'))$('desktopDownloadButton').classList.add('hidden');
   const shortcutDefaults = [
     {id:'save',title:'Сохранить проект',category:'Файл',keys:['Ctrl+S']},
     {id:'saveAs',title:'Сохранить копию .flosk (desktop)',category:'Файл',keys:['Ctrl+Shift+S']},
@@ -115,8 +150,8 @@
   let layerOpacityById = new Map(layers.map(layer=>[layer.id,layer.opacity]));
   let activeLayer = 'layer-2', objects = [], history = [], redoStack = [], assets = [], imageCache = new Map(), selectedIds = new Set(), clipboard = [];
   let frameStates = {}, settings = {curve_smoothing:'off',smoothing_sensitivity:50,smoothing_jitter_threshold:6,features:{},shortcuts:{},shortcut_enabled:{},shortcut_options:{},timeline_fps:12,onion_mode:'off',onion_frames:2,loop_enabled:true,loop_start:1,loop_end:12,playback_speed:1,tween_easing:'linear',motion_tween_duration:12,frame_markers:{},blank_keyframes:{},default_fill_enabled:true,fill_gradient_enabled:false,fill_gradient_type:'linear',fill_gradient_angle:0,fill_gradient_stops:[{offset:0,color:'#f0a36b'},{offset:100,color:'#e05d8a'}],frame_quality_scale:1,brush_size:8,blur_radius:8,stroke_color:'#f0a36b',fill_color:'#f0a36b',shadow_color:'#20202a',shadow_enabled:false}, recordingShortcut = null, paletteIndex = 0;
-  Object.assign(settings,{background_color:'#fbfaf7',grid_enabled:false,grid_size:100,grid_snap_enabled:false,preview_quality:'balanced',curve_smoothing_enabled:false});
-  let currentProjectId = null, projectRevision = 0, apiReady = false, saveTimer = null, saveInFlight = false, savePending = false, projectDirty = false, saveBlocked = false;
+  Object.assign(settings,{background_color:'#fbfaf7',grid_enabled:false,grid_size:100,grid_snap_enabled:false,grid_diagonals_enabled:false,preview_quality:'balanced',curve_smoothing_enabled:false});
+  let currentProjectId = null, currentProjectRole='owner', projectRevision = 0, apiReady = false, saveTimer = null, saveInFlight = false, savePending = false, projectDirty = false, saveBlocked = false;
   let multiplayerUserId = null;
   const strokeColor = $('strokeColor'), fillColor = $('fillColor');
   const colorIn = (hex) => {const n=parseInt(hex.slice(1),16);return `rgba(${n>>16},${(n>>8)&255},${n&255},1)`};
@@ -314,7 +349,7 @@
     $('storageStatus').textContent=apiReady?(cloudApiBase?'Облако · синхронизация':'Python · SQLite · версии включены'):'Браузер · сохранение на устройстве'
   }
   function save(){projectDirty=true;try{localStorage.setItem('floxzert-project',JSON.stringify(projectData()));if(currentProjectId)localStorage.setItem('floxzert-project-id',currentProjectId)}catch(e){console.error('Local project cache could not be saved',e);updateSaveStatus('Локальное сохранение недоступно','error')}if(!apiReady)return;if(saveBlocked){updateSaveStatus('Сохранение приостановлено — проверьте конфликт','error');return}clearTimeout(saveTimer);updateSaveStatus('Есть несохранённые изменения','saving');saveTimer=setTimeout(persistProject,400)}
-  async function persistProject(){if(!apiReady||!currentProjectId||!projectDirty||saveBlocked)return;if(saveInFlight){savePending=true;return}saveInFlight=true;savePending=false;projectDirty=false;const snapshot=projectData();try{const response=await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data:snapshot,expected_revision:projectRevision})});const result=await response.json();if(response.status===409){projectDirty=true;saveBlocked=true;updateSaveStatus('Конфликт версий — сохранение остановлено','error');console.error('Project revision conflict',result);return}if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);projectRevision=result.revision;updateSaveStatus('Все изменения сохранены')}catch(error){projectDirty=true;saveBlocked=true;updateSaveStatus('Ошибка сервера — данные в этом браузере','error');console.error('Project save failed',error)}finally{saveInFlight=false;if(savePending&&!saveBlocked){savePending=false;saveTimer=setTimeout(persistProject,100)}}}
+  async function persistProject(){if(!apiReady||!currentProjectId||!projectDirty||saveBlocked)return;if(saveInFlight){savePending=true;return}saveInFlight=true;savePending=false;projectDirty=false;const snapshot=projectData();try{const response=await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data:snapshot,expected_revision:projectRevision})});const result=await response.json();if(response.status===409){projectDirty=true;saveBlocked=true;updateSaveStatus('Конфликт версий — сохранение остановлено','error');console.error('Project revision conflict',result);return}if(response.status===403){projectDirty=true;saveBlocked=true;updateSaveStatus('Нет прав на редактирование · изменения сохранены только в этом браузере','error');notify('Для этого проекта доступен только просмотр');return}if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);projectRevision=result.revision;updateSaveStatus('Все изменения сохранены')}catch(error){projectDirty=true;saveBlocked=true;updateSaveStatus('Ошибка сервера — данные в этом браузере','error');console.error('Project save failed',error)}finally{saveInFlight=false;if(savePending&&!saveBlocked){savePending=false;saveTimer=setTimeout(persistProject,100)}}}
   async function flushSave(){clearTimeout(saveTimer);while(saveInFlight)await new Promise(resolve=>setTimeout(resolve,25));if(saveBlocked)throw new Error('Сохранение заблокировано из-за конфликта или ошибки сервера');if(apiReady&&projectDirty)await persistProject();while(saveInFlight)await new Promise(resolve=>setTimeout(resolve,25));if(saveBlocked)throw new Error('Сохранение заблокировано из-за конфликта или ошибки сервера');if(apiReady&&projectDirty)await flushSave()}
   function load(){try{const p=JSON.parse(localStorage.getItem('floxzert-project')||'null');if(p)applyProjectData({...p,frame_count:p.frame_count||p.frameCount})}catch(e){console.error('Local project cache could not be loaded',e)}}
   function migrateLegacyCanvas(data){if(Number.isInteger(data.width))return data;const migrated=JSON.parse(JSON.stringify(data));for(const object of migrated.objects||[]){for(const key of ['x','y','x2','y2','width','textSize'])if(typeof object[key]==='number')object[key]*=2;for(const point of object.points||[]){point.x*=2;point.y*=2}}migrated.width=canvas.width;migrated.height=canvas.height;return migrated}
@@ -342,6 +377,7 @@
         ?migrateLegacyCanvas({...projectData(),...local,name:local.name||project.data.name,frame_count:local.frame_count||local.frameCount||project.data.frame_count})
         :null;
       currentProjectId=project.id;
+      currentProjectRole=project.role||selected.role||'owner';
       projectRevision=project.revision;
       projectDirty=false;
       saveBlocked=false;
@@ -359,6 +395,7 @@
         const imported=await importResponse.json();
         if(!importResponse.ok)throw new Error(imported.error||`HTTP ${importResponse.status}`);
         currentProjectId=imported.id;
+        currentProjectRole='owner';
         projectRevision=imported.revision;
         applyProjectData(imported.data);
         apiReady=true;
@@ -382,13 +419,39 @@
     }
   }
   function point(e){const r=canvas.getBoundingClientRect();return {x:(e.clientX-r.left)*canvas.width/r.width,y:(e.clientY-r.top)*canvas.height/r.height}}
-  function snapPoint(p){if(!settings.grid_snap_enabled)return p;const step=Math.max(10,Number(settings.grid_size)||100);return {x:Math.round(p.x/step)*step,y:Math.round(p.y/step)*step}}
+  function snapPoint(p){
+    if(!settings.grid_snap_enabled)return p;
+    const step=Math.max(10,Number(settings.grid_size)||100);
+    const nearest={x:Math.round(p.x/step)*step,y:Math.round(p.y/step)*step};
+    if(settings.grid_diagonals_enabled!==true)return nearest;
+    let best=nearest,bestDistance=(p.x-nearest.x)**2+(p.y-nearest.y)**2;
+    const cellX=Math.floor(p.x/step),cellY=Math.floor(p.y/step);
+    for(let x=cellX-1;x<=cellX+1;x++)for(let y=cellY-1;y<=cellY+1;y++){
+      const left=x*step,top=y*step,right=left+step,bottom=top+step;
+      for(const [x1,y1,x2,y2] of [[left,top,right,bottom],[right,top,left,bottom]]){
+        const dx=x2-x1,dy=y2-y1,lengthSquared=dx*dx+dy*dy;
+        const t=Math.max(0,Math.min(1,((p.x-x1)*dx+(p.y-y1)*dy)/lengthSquared));
+        const candidate={x:x1+t*dx,y:y1+t*dy};
+        const distance=(p.x-candidate.x)**2+(p.y-candidate.y)**2;
+        if(distance<bestDistance){best=candidate;bestDistance=distance}
+      }
+    }
+    return best
+  }
   function drawGrid(){
     if(!settings.grid_enabled)return;
     const step=Math.max(10,Number(settings.grid_size)||100),majorStep=step*5;
     ctx.save();ctx.lineWidth=1;
     for(let x=0;x<=canvas.width;x+=step){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,canvas.height);ctx.strokeStyle=x%majorStep===0?'rgba(25,65,112,.72)':'rgba(25,65,112,.38)';ctx.stroke()}
     for(let y=0;y<=canvas.height;y+=step){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.strokeStyle=y%majorStep===0?'rgba(25,65,112,.72)':'rgba(25,65,112,.38)';ctx.stroke()}
+    if(settings.grid_diagonals_enabled===true){
+      ctx.beginPath();
+      for(let x=0;x<canvas.width;x+=step)for(let y=0;y<canvas.height;y+=step){
+        ctx.moveTo(x,y);ctx.lineTo(Math.min(x+step,canvas.width),Math.min(y+step,canvas.height));
+        ctx.moveTo(Math.min(x+step,canvas.width),y);ctx.lineTo(x,Math.min(y+step,canvas.height));
+      }
+      ctx.strokeStyle='rgba(25,65,112,.16)';ctx.setLineDash([3,5]);ctx.stroke();ctx.setLineDash([])
+    }
     ctx.restore()
   }
   function applyPreviewQuality(){
@@ -1047,9 +1110,9 @@
   }
   function snapStrokeToGrid(stroke){
     if(!settings.grid_snap_enabled||stroke.type!=='stroke'||!Array.isArray(stroke.points))return stroke;
-    const step=Math.max(10,Number(settings.grid_size)||100),points=[];
+    const points=[];
     stroke.points.forEach(point=>{
-      const snapped={...point,x:Math.round(point.x/step)*step,y:Math.round(point.y/step)*step};
+      const snapped={...point,...snapPoint(point)};
       const previous=points[points.length-1];
       if(previous&&previous.x===snapped.x&&previous.y===snapped.y)previous.pressure=snapped.pressure;
       else points.push(snapped)
@@ -1388,9 +1451,9 @@
     clearRenderCaches();
     for(const layerId of new Set(objects.filter(object=>object.frame===currentFrame).map(object=>object.layer)))setBlankKeyframe(layerId,currentFrame,false);
     save();render();updateTimeline();renderLayers();syncEditorControls();
-    if(apiReady&&currentProjectId&&multiplayerUserId){
+    if(apiReady&&currentProjectId&&currentProjectRole!=='viewer'){
       fetch('/api/multiplayer/changes/record',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-        project_id:currentProjectId,user_id:multiplayerUserId,revision:projectRevision+1,
+        project_id:currentProjectId,revision:projectRevision+1,
         action:'project_update',payload:{frame:currentFrame,object_count:objects.length}
       })}).catch(error=>console.warn('Could not record collaboration change',error));
     }
@@ -2146,7 +2209,8 @@
     zoom=Math.max(.1,Math.min(8,zoom+(event.deltaY<0?.25:-.25)));applyZoom()
   },{passive:false});
   $('gridToggle').onclick=()=>{settings.grid_enabled=!settings.grid_enabled;$('gridToggle').classList.toggle('active',settings.grid_enabled);$('gridToggle').setAttribute('aria-pressed',String(settings.grid_enabled));render();save()};
-  $('gridSnap').onchange=e=>{settings.grid_snap_enabled=e.target.checked;save();notify(settings.grid_snap_enabled?'Привязка к пересечениям сетки включена':'Привязка выключена')};
+  $('gridSnap').onchange=e=>{settings.grid_snap_enabled=e.target.checked;save();notify(settings.grid_snap_enabled?'Привязка к сетке включена':'Привязка выключена')};
+  $('gridDiagonals').onchange=e=>{settings.grid_diagonals_enabled=e.target.checked;render();save();notify(settings.grid_diagonals_enabled?'Диагонали клеток включены':'Диагонали клеток выключены')};
   $('gridSize').onchange=e=>{settings.grid_size=Number(e.target.value);render();save()};
   $('previewQuality').onchange=e=>{settings.preview_quality=e.target.value;applyPreviewQuality();render();save()};
   $('frameQuality').onchange=e=>{settings.frame_quality_scale=Number(e.target.value);syncFrameQualityLabel();save()};
@@ -2182,7 +2246,7 @@
         await flushSave();
         const response=await fetch('/api/projects/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data})}),project=await response.json();
         if(!response.ok)throw new Error(project.error||`HTTP ${response.status}`);
-        currentProjectId=project.id;projectRevision=project.revision;projectDirty=false;saveBlocked=false;applyProjectData(project.data);localStorage.setItem('floxzert-project-id',currentProjectId);
+        currentProjectId=project.id;currentProjectRole='owner';projectRevision=project.revision;projectDirty=false;saveBlocked=false;applyProjectData(project.data);localStorage.setItem('floxzert-project-id',currentProjectId);
       }else{
         snapshot();applyProjectData(data);projectDirty=true;
       }
@@ -2292,6 +2356,22 @@
   }
   async function ensureMultiplayerIdentity(){
     if(multiplayerUserId)return multiplayerUserId;
+    if(cloudApiBase){
+      if(!localStorage.getItem('floxzert-cloud-token')){
+        notify('Войдите в аккаунт, чтобы открыть друзей и общие проекты');
+        $('settingsModal').classList.remove('hidden');
+        document.querySelector('[data-settings-tab="account"]').click();
+        return null
+      }
+      try{
+        const response=await fetch('/api/auth/me');
+        const result=await response.json();if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);
+        if(!result.user?.id)throw new Error('Сервер не вернул пользователя аккаунта');
+        multiplayerUserId=result.user.id;
+        localStorage.setItem('floxzert-account',JSON.stringify(result.user));
+        return multiplayerUserId
+      }catch(error){notify(error.message);return null}
+    }
     const profile=JSON.parse(localStorage.getItem('floxzert-account')||'null');
     if(!profile?.email){notify('Сначала сохраните email в локальном профиле');return null}
     try{
@@ -2301,15 +2381,18 @@
     }catch(error){notify(error.message);return null}
   }
   async function renderSocialProjects(){
-    const list=$('socialProjectList');if(!apiReady){list.textContent='Командные проекты требуют настроенного облачного API';return}
+    const list=$('socialProjectList');if(!apiReady){list.textContent=cloudApiBase?'Войдите в аккаунт, чтобы загрузить облачные проекты':'Командные проекты требуют настроенного облачного API';return}
     const userId=await ensureMultiplayerIdentity();if(!userId)return;
     try{
-      const response=await fetch('/api/multiplayer/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:userId})});
+      const response=cloudApiBase
+        ?await fetch('/api/multiplayer/projects')
+        :await fetch('/api/multiplayer/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:userId})});
       const result=await response.json();if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);
       list.replaceChildren();
       if(!result.projects.length){list.textContent='Проектов пока нет';return}
       result.projects.forEach(project=>{
-        const card=socialCard(project.name,`${project.role} · ревизия ${project.revision} · ${project.updated_at}`,'Открыть',async()=>{
+        const roleNames={owner:'владелец',editor:'редактор',viewer:'только просмотр'};
+        const card=socialCard(project.name,`${roleNames[project.role]||project.role} · ревизия ${project.revision} · ${project.updated_at}`,'Открыть',async()=>{
           try{await loadProject(project.id);$('socialModal').classList.add('hidden')}catch(error){notify(error.message)}
         });
         if(project.role==='owner'){
@@ -2318,7 +2401,9 @@
             const email=prompt('Email участника проекта:','');if(!email||!email.trim())return;
             const role=confirm('Разрешить редактирование? Нажмите Cancel для режима только чтения.')?'editor':'viewer';
             try{
-              const response=await fetch('/api/multiplayer/projects/share',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project_id:project.id,owner_id:userId,email:email.trim(),role})});
+              const payload={project_id:project.id,email:email.trim(),role};
+              if(!cloudApiBase)payload.owner_id=userId;
+              const response=await fetch('/api/multiplayer/projects/share',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
               const result=await response.json();if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);
               notify(`Проект открыт для ${result.member.name}: ${role}`);
             }catch(error){notify(error.message)}
@@ -2330,22 +2415,34 @@
     }catch(error){list.textContent=`Не удалось загрузить проекты: ${error.message}`}
   }
   async function renderFriends(){
-    const list=$('friendList');const userId=await ensureMultiplayerIdentity();if(!userId)return;
+    const list=$('friendList');if(!apiReady){list.textContent=cloudApiBase?'Войдите в аккаунт, чтобы загрузить друзей':'Список друзей требует настроенного облачного API';return}
+    const userId=await ensureMultiplayerIdentity();if(!userId)return;
     try{
-      const response=await fetch('/api/multiplayer/friends',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:userId})});
+      const response=cloudApiBase
+        ?await fetch('/api/multiplayer/friends')
+        :await fetch('/api/multiplayer/friends',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:userId})});
       const result=await response.json();if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);
       list.replaceChildren();
       if(!result.friends.length){list.textContent='Друзей пока нет';return}
       result.friends.forEach(friend=>{
-        const incoming=friend.requester_id===friend.requester_id&&friend.status==='pending';
-        const isIncoming=incoming&&friend.addressee_id===userId;
-        const action=isIncoming? (async()=>{}) : null;
+        const isIncoming=friend.status==='pending'&&friend.addressee_id===userId&&friend.requester_id!==userId;
+        const isOutgoing=friend.status==='pending'&&friend.requester_id===userId;
         let card;
         if(isIncoming){
-          card=socialCard(friend.name,`${friend.email} · запрос в друзья`,'Принять',async()=>{
-            await fetch('/api/multiplayer/friends/respond',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:userId,requester_id:friend.requester_id,accept:true})});renderFriends();
+          card=socialCard(friend.name,`${friend.email} · запрос в друзья`,'Принять',async event=>{
+            const acceptButton=event.currentTarget;acceptButton.disabled=true;
+            try{
+              const payload={requester_id:friend.requester_id,accept:true};
+              if(!cloudApiBase)payload.user_id=userId;
+              const response=await fetch('/api/multiplayer/friends/respond',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+              const result=await response.json();if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);
+              renderFriends()
+            }catch(error){acceptButton.disabled=false;notify(error.message)}
           });
-        }else card=socialCard(friend.name,`${friend.email} · ${friend.status==='accepted'?(friend.online?'онлайн':'офлайн'):friend.status}`,null,null);
+        }else{
+          const status=friend.status==='accepted'?(friend.online?'онлайн':'офлайн'):isOutgoing?'ожидает ответа':friend.status;
+          card=socialCard(friend.name,`${friend.email} · ${status}`,null,null)
+        }
         list.append(card);
       });
     }catch(error){list.textContent=`Не удалось загрузить друзей: ${error.message}`}
@@ -2353,23 +2450,49 @@
   $('sendFriendRequest').onclick=async()=>{
     const email=$('friendEmail').value.trim();const userId=await ensureMultiplayerIdentity();if(!userId||!email)return;
     try{
-      const response=await fetch('/api/multiplayer/friends/request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requester_id:userId,email})});
+      const payload={email};if(!cloudApiBase)payload.requester_id=userId;
+      const response=await fetch('/api/multiplayer/friends/request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
       const result=await response.json();if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);
-      $('friendEmail').value='';notify(`Запрос отправлен: ${result.friend.name}`);renderFriends();
+      $('friendEmail').value='';notify(result.friend.status==='accepted'?`${result.friend.name} уже ваш друг`:`Запрос отправлен: ${result.friend.name}`);renderFriends();
     }catch(error){notify(error.message)}
   };
   async function renderSharedToolbox(){
-    const list=$('toolboxList');const userId=await ensureMultiplayerIdentity();if(!userId)return;
+    const list=$('toolboxList');if(!apiReady){list.textContent=cloudApiBase?'Войдите в аккаунт, чтобы загрузить общий тулбокс':'Общий тулбокс требует настроенного облачного API';return}
+    const userId=await ensureMultiplayerIdentity();if(!userId)return;
     try{
-      const response=await fetch(`/api/multiplayer/toolbox?owner=${encodeURIComponent(userId)}`);
+      const response=cloudApiBase?await fetch('/api/multiplayer/toolbox')
+        :await fetch(`/api/multiplayer/toolbox?owner=${encodeURIComponent(userId)}`);
       const result=await response.json();if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);
       list.replaceChildren();
       if(!result.items.length){list.textContent='Тулбокс пуст';return}
       result.items.forEach(item=>{
-        list.append(socialCard(item.name,`${item.category} · сохранено ${item.updated_at}`,'Удалить',async()=>{
-          if(!confirm(`Удалить «${item.name}» из тулбокса?`))return;
-          await fetch('/api/multiplayer/toolbox/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({owner_id:userId,item_id:item.id})});renderSharedToolbox();
-        }));
+        const ownerDetail=item.owner_id===userId?'ваша деталь':`от ${item.owner_name||'друга'}`;
+        const card=socialCard(item.name,`${item.category} · ${ownerDetail} · ${item.updated_at}`,null,null);
+        const add=document.createElement('button');add.type='button';add.textContent='На холст';
+        add.onclick=event=>{
+          const source=item.data?.objects;
+          if(!Array.isArray(source)||!source.length){notify('В тулбоксе нет объектов для вставки');return}
+          try{
+            const copies=source.map(object=>{
+              const clone=refreshObjectIds(JSON.parse(JSON.stringify(object)));
+              setObjectLayerAndFrame(clone,activeLayer,currentFrame);translateObjectGeometry(clone,18,18);return clone
+            });
+            snapshot();objects.push(...copies);selectedIds=new Set(copies.map(object=>object.id));selectedId=copies[0].id;
+            finishChange();notify(`Деталь добавлена на холст: ${item.name}`);
+          }catch(error){notify(`Не удалось вставить деталь: ${error.message}`)}
+        };
+        card.append(add);
+        if(item.owner_id===userId){
+          const remove=document.createElement('button');remove.type='button';remove.textContent='Удалить';
+          remove.onclick=async()=>{if(!confirm(`Удалить «${item.name}» из тулбокса?`))return;remove.disabled=true;try{
+            const payload={item_id:item.id};if(!cloudApiBase)payload.owner_id=userId;
+            const response=await fetch('/api/multiplayer/toolbox/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+            const result=await response.json();if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);
+            renderSharedToolbox()
+          }catch(error){remove.disabled=false;notify(error.message)}};
+          card.append(remove)
+        }
+        list.append(card);
       });
     }catch(error){list.textContent=`Не удалось загрузить тулбокс: ${error.message}`}
   }
@@ -2380,7 +2503,8 @@
     if(!name||!name.trim())return;
     const data=selection.map(object=>JSON.parse(JSON.stringify(object)));
     try{
-      const response=await fetch('/api/multiplayer/toolbox',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({owner_id:userId,name:name.trim(),category:'object',data:{objects:data}})});
+      const payload={name:name.trim(),category:'object',data:{objects:data}};if(!cloudApiBase)payload.owner_id=userId;
+      const response=await fetch('/api/multiplayer/toolbox',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
       const result=await response.json();if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);
       notify(`Деталь сохранена в общий тулбокс: ${result.item.name}`);renderSharedToolbox();
     }catch(error){notify(error.message)}
@@ -2390,7 +2514,8 @@
     const userId=await ensureMultiplayerIdentity();if(!userId)return;
     const name=prompt('Название проекта:','Новый проект');if(!name||!name.trim())return;
     try{
-      const response=await fetch('/api/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name.trim(),owner_id:userId})});
+      const payload={name:name.trim()};if(!cloudApiBase)payload.owner_id=userId;
+      const response=await fetch('/api/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
       const result=await response.json();if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);
       await loadProject(result.id);$('socialModal').classList.add('hidden');
     }catch(error){notify(error.message)}
@@ -2841,8 +2966,8 @@
   };
   function showManager(title){$('managerTitle').textContent=title;$('managerBody').replaceChildren();$('managerModal').classList.remove('hidden')}
   function createManagerItem(title,detail,action,current=false){const button=document.createElement('button');button.type='button';button.className='manager-item'+(current?' current':'');const copy=document.createElement('span');copy.className='manager-item-copy';const name=document.createElement('b');name.textContent=title;const sub=document.createElement('small');sub.textContent=detail;copy.append(name,sub);const label=document.createElement('span');label.className='manager-item-action';label.textContent=current?'ОТКРЫТ':'ОТКРЫТЬ';button.append(copy,label);button.onclick=action;return button}
-  async function loadProject(projectId){await flushSave();const response=await fetch(`/api/projects/${encodeURIComponent(projectId)}`);const project=await response.json();if(!response.ok)throw new Error(project.error||`HTTP ${response.status}`);currentProjectId=project.id;projectRevision=project.revision;projectDirty=false;saveBlocked=false;applyProjectData(project.data);localStorage.setItem('floxzert-project-id',currentProjectId);localStorage.setItem('floxzert-project',JSON.stringify(projectData()));history=[];redoStack=[];updateSaveStatus('Все изменения сохранены');renderLayers();renderTimeline();render()}
-  $('projectSwitcher').onclick=async()=>{if(!apiReady){notify('Список облачных проектов требует подключённого API; текущий проект хранится в браузере');return}try{const response=await fetch('/api/projects');const result=await response.json();if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);showManager('Открыть проект');const body=$('managerBody'),list=document.createElement('div');list.className='manager-list';result.projects.forEach(project=>list.appendChild(createManagerItem(project.name,`Изменён ${project.updated_at} · версия ${project.revision}`,async()=>{try{await loadProject(project.id);$('managerModal').classList.add('hidden')}catch(error){showManagerError(error.message)}} ,project.id===currentProjectId)));body.appendChild(list);const form=document.createElement('form');form.className='manager-form';const input=document.createElement('input');input.name='name';input.maxLength=160;input.required=true;input.placeholder='Название нового проекта';const create=document.createElement('button');create.type='submit';create.textContent='Создать проект';form.append(input,create);form.onsubmit=async event=>{event.preventDefault();try{await flushSave();const createdResponse=await fetch('/api/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:input.value.trim()})});const created=await createdResponse.json();if(!createdResponse.ok)throw new Error(created.error||`HTTP ${createdResponse.status}`);currentProjectId=created.id;projectRevision=created.revision;projectDirty=false;saveBlocked=false;applyProjectData(created.data);localStorage.setItem('floxzert-project-id',currentProjectId);localStorage.setItem('floxzert-project',JSON.stringify(projectData()));history=[];redoStack=[];renderLayers();renderTimeline();render();$('managerModal').classList.add('hidden')}catch(error){showManagerError(error.message)}};body.appendChild(form)}catch(error){updateSaveStatus('Не удалось загрузить проекты','error');console.error('Project list failed',error)}};
+  async function loadProject(projectId){if(currentProjectRole!=='viewer')await flushSave();const response=await fetch(`/api/projects/${encodeURIComponent(projectId)}`);const project=await response.json();if(!response.ok)throw new Error(project.error||`HTTP ${response.status}`);currentProjectId=project.id;currentProjectRole=project.role||'owner';projectRevision=project.revision;projectDirty=false;saveBlocked=false;applyProjectData(project.data);localStorage.setItem('floxzert-project-id',currentProjectId);localStorage.setItem('floxzert-project',JSON.stringify(projectData()));history=[];redoStack=[];updateSaveStatus(currentProjectRole==='viewer'?'Проект открыт только для просмотра':'Все изменения сохранены');renderLayers();renderTimeline();render()}
+  $('projectSwitcher').onclick=async()=>{if(!apiReady){notify('Список облачных проектов требует подключённого API; текущий проект хранится в браузере');return}try{const response=await fetch('/api/projects');const result=await response.json();if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);showManager('Открыть проект');const body=$('managerBody'),list=document.createElement('div');list.className='manager-list';result.projects.forEach(project=>list.appendChild(createManagerItem(project.name,`Изменён ${project.updated_at} · версия ${project.revision}`,async()=>{try{await loadProject(project.id);$('managerModal').classList.add('hidden')}catch(error){showManagerError(error.message)}} ,project.id===currentProjectId)));body.appendChild(list);const form=document.createElement('form');form.className='manager-form';const input=document.createElement('input');input.name='name';input.maxLength=160;input.required=true;input.placeholder='Название нового проекта';const create=document.createElement('button');create.type='submit';create.textContent='Создать проект';form.append(input,create);form.onsubmit=async event=>{event.preventDefault();try{await flushSave();const createdResponse=await fetch('/api/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:input.value.trim()})});const created=await createdResponse.json();if(!createdResponse.ok)throw new Error(created.error||`HTTP ${createdResponse.status}`);currentProjectId=created.id;currentProjectRole='owner';projectRevision=created.revision;projectDirty=false;saveBlocked=false;applyProjectData(created.data);localStorage.setItem('floxzert-project-id',currentProjectId);localStorage.setItem('floxzert-project',JSON.stringify(projectData()));history=[];redoStack=[];renderLayers();renderTimeline();render();$('managerModal').classList.add('hidden')}catch(error){showManagerError(error.message)}};body.appendChild(form)}catch(error){updateSaveStatus('Не удалось загрузить проекты','error');console.error('Project list failed',error)}};
   function showManagerError(message){const error=document.createElement('div');error.className='manager-error';error.textContent=message;$('managerBody').appendChild(error)}
   $('historyButton').onclick=async()=>{if(!apiReady||!currentProjectId){notify('История версий доступна при подключённом backend API; текущая копия сохраняется в браузере');return}try{const response=await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/revisions`);const result=await response.json();if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);const projectId=currentProjectId;showManager('История версий');const list=document.createElement('div');list.className='manager-list';result.revisions.forEach(revision=>list.appendChild(createManagerItem(`Версия ${revision.revision}`,revision.created_at,()=>{showManager('Восстановление версии');const message=document.createElement('p');message.className='manager-confirm';message.textContent=`Восстановить версию ${revision.revision}? Текущая версия останется в истории.`;const actions=document.createElement('div');actions.className='manager-confirm-actions';const cancel=document.createElement('button');cancel.type='button';cancel.className='secondary';cancel.textContent='Отмена';cancel.onclick=()=>$('historyButton').click();const confirmRestore=document.createElement('button');confirmRestore.type='button';confirmRestore.textContent='Восстановить';confirmRestore.onclick=async()=>{confirmRestore.disabled=true;try{await flushSave();const restoreResponse=await fetch(`/api/projects/${encodeURIComponent(projectId)}/restore`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:revision.revision,expected_revision:projectRevision})});const restored=await restoreResponse.json();if(!restoreResponse.ok)throw new Error(restored.error||`HTTP ${restoreResponse.status}`);projectRevision=restored.revision;projectDirty=false;saveBlocked=false;applyProjectData(restored.data);localStorage.setItem('floxzert-project',JSON.stringify(projectData()));history=[];redoStack=[];updateSaveStatus(`Восстановлена версия ${revision.revision}`);renderLayers();renderTimeline();render();$('managerModal').classList.add('hidden')}catch(error){showManagerError(error.message);confirmRestore.disabled=false}};actions.append(cancel,confirmRestore);$('managerBody').append(message,actions)} ,revision.revision===projectRevision)));$('managerBody').appendChild(list)}catch(error){updateSaveStatus('Не удалось загрузить историю','error');console.error('Version history failed',error)}};
   $('closeManager').onclick=()=>$('managerModal').classList.add('hidden');
@@ -3091,9 +3216,9 @@
   };
   $('accountModeToggle').onclick=()=>setAccountMode(accountMode==='register'?'login':'register');
   document.querySelectorAll('.provider-button[data-provider]').forEach(button=>{
-    const provider=button.dataset.provider,name=OAUTH_NAMES[provider],available=Boolean(cloudApiBase)&&!desktopLocalAI&&floxConfig.oauth!==false;
+    const provider=button.dataset.provider,name=OAUTH_NAMES[provider],available=Boolean(cloudApiBase)&&(!desktopLocalAI||Boolean(window.floxDesktop?.startOAuth))&&floxConfig.oauth!==false;
     button.disabled=!available;
-    button.textContent=available?`Войти через ${name}`:`${name} · только в веб-версии`;
+    button.textContent=available?`Войти через ${name}`:`${name} · настройте облачный API`;
     button.onclick=async()=>{
       button.disabled=true;
       try{
@@ -3102,9 +3227,17 @@
         if(!providers)throw new Error(`Сервер пока не поддерживает вход через ${name}: на backend нужны /api/auth/providers и /api/auth/oauth/${provider}/start (см. README)`);
         if(!providers[provider])throw new Error(`${name} не настроен на сервере: добавьте ключи ${name} в переменные окружения backend`);
         const state=Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('');
-        sessionStorage.setItem('floxzert-oauth-state',state);
-        location.assign(`${cloudApiBase}/api/auth/oauth/${provider}/start?return_to=${encodeURIComponent(location.origin+location.pathname)}&state=${state}`);
+        const returnTo=desktopLocalAI?'floxzert://oauth/complete':location.origin+location.pathname;
+        const startUrl=`${cloudApiBase}/api/auth/oauth/${provider}/start?return_to=${encodeURIComponent(returnTo)}&state=${state}`;
+        if(desktopLocalAI){
+          localStorage.setItem('floxzert-oauth-state',state);
+          await window.floxDesktop.startOAuth(provider,startUrl);
+        }else{
+          sessionStorage.setItem('floxzert-oauth-state',state);
+          location.assign(startUrl);
+        }
       }catch(error){
+        (desktopLocalAI?localStorage:sessionStorage).removeItem('floxzert-oauth-state');
         notify(error.message);$('accountStatus').textContent=error.message;button.disabled=false;
       }
     };
@@ -3117,6 +3250,8 @@
       const result=await response.json();
       if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);
       localStorage.removeItem('floxzert-cloud-token');
+      localStorage.removeItem('floxzert-cloud-expires-at');
+      multiplayerUserId=null;
       $('accountStatus').textContent='Вы вышли из облачного аккаунта; локальная копия проекта сохранена';
       setAccountMode('register');
       updateAiAccess();
@@ -3301,6 +3436,31 @@
   };
   initializeAccountOnboarding();
   updateAiAccess();
+  oauthReturnPromise=consumeOAuthCallback(location.hash);
+  window.floxDesktop?.onOAuthCallback(url=>{
+    try{
+      const callbackUrl=new URL(url);
+      if(callbackUrl.protocol!=='floxzert:'||callbackUrl.hostname!=='oauth'||callbackUrl.pathname!=='/complete')throw new Error('Получена недопустимая ссылка входа');
+      oauthReturnMessage='';
+      oauthReturnPromise=consumeOAuthCallback(callbackUrl.hash,true);
+      void (async()=>{
+        await oauthReturnPromise;
+        $('welcomeModal').classList.add('hidden');
+        $('settingsModal').classList.remove('hidden');
+        document.querySelector('[data-settings-tab="account"]').click();
+        await initializeProjectStorage();
+        loadAiProvider();
+        document.querySelectorAll('.provider-button[data-provider]').forEach(button=>{button.disabled=!cloudApiBase||floxConfig.oauth===false});
+        if(oauthReturnMessage)notify(oauthReturnMessage)
+      })().catch(error=>{
+        console.error('Desktop OAuth callback failed',error);
+        notify(`Вход не выполнен: ${error.message}`)
+      })
+    }catch(error){
+      console.error('Desktop OAuth callback rejected',error);
+      notify(error.message)
+    }
+  });
   async function initializeMultiplayerIdentity(){
     if(!apiReady)return;
     const profile=JSON.parse(localStorage.getItem('floxzert-account')||'null');
@@ -3322,6 +3482,7 @@
     $('brushSize').value=settings.brush_size;$('blurRadius').value=settings.blur_radius;
     $('gridToggle').classList.toggle('active',settings.grid_enabled===true);$('gridToggle').setAttribute('aria-pressed',String(settings.grid_enabled===true));
     $('gridSize').value=String(settings.grid_size||100);$('gridSnap').checked=settings.grid_snap_enabled===true;
+    $('gridDiagonals').checked=settings.grid_diagonals_enabled===true;
     $('previewQuality').value=settings.preview_quality||'balanced';$('smoothingEnabled').checked=settings.curve_smoothing_enabled===true;
     $('smoothingMode').value=settings.curve_smoothing;$('smoothingSensitivity').value=settings.smoothing_sensitivity;$('smoothingSensitivityValue').textContent=`${settings.smoothing_sensitivity}%`;
     $('smoothingJitter').value=settings.smoothing_jitter_threshold;$('smoothingJitterValue').textContent=`${settings.smoothing_jitter_threshold} px`;
@@ -3340,6 +3501,7 @@
     settings.grid_enabled=savedSettings.grid_enabled===true;
     settings.grid_size=[50,100,200,400].includes(Number(savedSettings.grid_size))?Number(savedSettings.grid_size):100;
     settings.grid_snap_enabled=savedSettings.grid_snap_enabled===true;
+    settings.grid_diagonals_enabled=savedSettings.grid_diagonals_enabled===true;
     settings.preview_quality=['draft','balanced','high'].includes(savedSettings.preview_quality)?savedSettings.preview_quality:'balanced';
     settings.curve_smoothing_enabled=typeof savedSettings.curve_smoothing_enabled==='boolean'?savedSettings.curve_smoothing_enabled:(savedSettings.curve_smoothing||'off')!=='off';
     if(settings.curve_smoothing_enabled&&settings.curve_smoothing==='off')settings.curve_smoothing='light';
@@ -3352,8 +3514,23 @@
   document.addEventListener('keyup',releaseHeldShortcut);
   window.addEventListener('blur',()=>{activeShortcutContext='global';clearPendingShortcutStates()});
   window.addEventListener('beforeunload',()=>{if(projectDirty){try{localStorage.setItem('floxzert-project',JSON.stringify(projectData()))}catch(error){console.error('Emergency local save failed',error)}}});
-  renderLayers();renderTimeline();render();applyZoom();renderFeatureCatalog();renderLearning();initializeProjectStorage().finally(()=>{if(!cloudApiBase)initializeMultiplayerIdentity();if(desktopLocalAI)void refreshDesktopLocalAIStatus();loadAiProvider()});
-if(oauthReturnMessage)setTimeout(()=>{notify(oauthReturnMessage);if(!localStorage.getItem('floxzert-cloud-token')&&$('accountStatus'))$('accountStatus').textContent=oauthReturnMessage},400);
+  renderLayers();renderTimeline();render();applyZoom();renderFeatureCatalog();renderLearning();
+  void (async()=>{
+    await oauthReturnPromise;
+    await initializeProjectStorage();
+    if(!cloudApiBase)initializeMultiplayerIdentity();
+    if(desktopLocalAI)void refreshDesktopLocalAIStatus();
+    loadAiProvider();
+    if(oauthReturnMessage)setTimeout(()=>{
+      notify(oauthReturnMessage);
+      if($('accountStatus')){
+        const account=JSON.parse(localStorage.getItem('floxzert-account')||'null');
+        $('accountStatus').textContent=localStorage.getItem('floxzert-cloud-token')&&account
+          ?`Вход через аккаунт · ${account.name||account.email} · облако подключено`
+          :oauthReturnMessage
+      }
+    },400)
+  })();
   setInterval(()=>{
     if(!apiReady||!currentProjectId||saveInFlight||projectDirty||saveBlocked||document.hidden)return;
     fetch(`/api/projects/${encodeURIComponent(currentProjectId)}`).then(response=>response.json()).then(project=>{

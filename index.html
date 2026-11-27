@@ -24,6 +24,7 @@
         <button class="icon-button" id="historyButton" title="История версий" aria-label="История версий">◷</button>
         <button class="share-button">Поделиться</button>
         <button class="share-button" id="downloadProject" title="Сохранить проект .flosk в установленном приложении">Сохранить .flosk</button>
+        <a class="desktop-download-button" id="desktopDownloadButton" href="./download.html" title="Скачать настольную версию FloxZert для Windows" aria-label="Скачать FloxZert для Windows">Скачать Desktop</a>
         <button class="export-button" id="exportTop">Экспорт <span>↗</span></button>
         <button class="support-button" id="openSupport" title="Техподдержка и справка">Справка</button>
         <button class="support-button" id="openSocial" title="Проекты, друзья и совместная работа">Сообщество</button>
@@ -95,7 +96,8 @@
             <button class="icon-button" id="redoButton" title="Повторить">↷</button>
             <span class="context-separator"></span>
             <button class="grid-button" id="gridToggle" title="Показать/скрыть сетку" aria-pressed="false">▦ Сетка</button>
-            <label class="grid-snap-control" title="Привязывать рисование, перемещение и изменение размера объектов к сетке; видимость сетки настраивается отдельно"><input type="checkbox" id="gridSnap"> Привязка</label>
+            <label class="grid-snap-control" title="Привязывать рисование, перемещение и изменение размера объектов к пересечениям сетки"><input type="checkbox" id="gridSnap"> Привязка</label>
+            <label class="grid-snap-control" title="Показывать диагонали клеток и привязывать к ним, если включена привязка"><input type="checkbox" id="gridDiagonals"> Диагонали</label>
             <select id="gridSize" title="Размер клетки сетки" aria-label="Размер клетки сетки"><option value="50">50 px</option><option value="100" selected>100 px</option><option value="200">200 px</option><option value="400">400 px</option></select>
             <label class="quality-control" title="Качество экранного предпросмотра">Качество
               <select id="previewQuality" aria-label="Качество предпросмотра"><option value="draft">Скорость</option><option value="balanced" selected>Обычное</option><option value="high">Высокое</option></select>
