@@ -57,6 +57,18 @@
 
 Workflow собирает сайт из файлов корня и публикует его через GitHub Pages. Если основная ветка репозитория называется не `main`, измените имя ветки в `.github/workflows/pages.yml`.
 
+## Вход через Google, GitHub и Apple
+
+Кнопки в **Настройки → Аккаунт и облако** активны, когда в `cloud-config.js` указан `apiBase`; отключить их можно параметром `oauth: false`. Ключи провайдеров хранятся только на backend. Для работы входа backend должен поддерживать:
+
+| Адрес | Что делает |
+| --- | --- |
+| `GET /api/auth/providers` | Отдаёт `{"google":true,"github":true,"apple":true}` — какие провайдеры настроены |
+| `GET /api/auth/oauth/{provider}/start?return_to=…&state=…` | Проверяет `return_to` по белому списку и перенаправляет на страницу провайдера |
+| `/api/auth/oauth/{provider}/callback` | Обменивает код на профиль, находит или создаёт пользователя и перенаправляет на `return_to#oauth_token=<токен>&state=<state>&provider=<provider>`; при ошибке — на `return_to#oauth_error=<текст>` |
+
+Токен проверяется существующим `GET /api/auth/me`. Адрес возврата в консолях провайдеров: `https://<адрес API>/api/auth/oauth/google/callback` (так же для `github` и `apple`). Apple требует платный Apple Developer Program: Services ID, Return URL, подтверждённый домен и ключ `.p8`; ответ приходит методом `form_post`.
+
 ## Хранение данных и ограничения веб-версии
 
 - Автосохранение работает локально в хранилище браузера. Данные привязаны к браузеру и адресу сайта; они не синхронизируются между устройствами.

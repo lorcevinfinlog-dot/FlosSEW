@@ -81,6 +81,8 @@
 .account-mode-toggle{background:#242b36!important;color:#c7d4e4!important}
 .provider-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:10px}
 .provider-button{background:#202938;border:1px solid #354256;border-radius:6px;padding:8px;color:#8391a5;font-size:9px}
+.provider-button:not(:disabled){color:#edf1f7;cursor:pointer}
+.provider-button:not(:disabled):hover,.provider-button:not(:disabled):focus-visible{border-color:#efa36c;outline:none}
 .learning-progress-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;color:#aeb8c7;font-size:9px}
 .learning-progress-row{grid-column:1/-1}
 .support-button{border:1px solid #383a45!important;border-radius:6px;padding:8px 10px;color:#ddd!important;font-size:10px}

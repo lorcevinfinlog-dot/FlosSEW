@@ -14,6 +14,20 @@
     }
     return nativeFetch(input,init)
   };
+  const OAUTH_NAMES={google:'Google',github:'GitHub',apple:'Apple'};
+  let oauthReturnMessage='';
+  (()=>{
+    if(!/oauth_(token|error)=/.test(location.hash))return;
+    const params=new URLSearchParams(location.hash.slice(1)),expected=sessionStorage.getItem('floxzert-oauth-state');
+    sessionStorage.removeItem('floxzert-oauth-state');
+    history.replaceState(null,'',location.pathname+location.search);
+    if(params.get('oauth_error')){oauthReturnMessage=`Вход не выполнен: ${params.get('oauth_error').slice(0,200)}`;return}
+    const token=params.get('oauth_token');
+    if(!token||!expected||params.get('state')!==expected){oauthReturnMessage='Вход отклонён: не совпал код проверки. Попробуйте ещё раз.';return}
+    localStorage.setItem('floxzert-cloud-token',token);
+    localStorage.setItem('floxzert-guest','false');
+    oauthReturnMessage=`Вход через ${OAUTH_NAMES[params.get('provider')]||'внешний сервис'} выполнен`;
+  })();
   const labels = {select:'Перемещение',brush:'Кисть',pencil:'Карандаш',eraser:'Ластик',fill:'Заливка',line:'Линия',rect:'Прямоугольник',roundrect:'Скруглённый прямоугольник',ellipse:'Эллипс',triangle:'Треугольник',polygon:'Многоугольник',star:'Звезда',text:'Текст',lasso:'Свободное лассо',magic:'Быстрое выделение',blur:'Размытие',eyedropper:'Пипетка'};
   const AI_MODELS={'flox-mini':['Flox Mini 0.1.0.1'],flox:['Flox 0.1.0.1'],floxzert:['Flox Mini 0.1.0.1'],gemini:['gemini-2.5-flash','gemini-2.5-pro'],openai:['gpt-4o-mini','gpt-4.1-mini','gpt-4o'],anthropic:['claude-haiku-4-5','claude-sonnet-4-5'],deepseek:['deepseek-chat','deepseek-reasoner'],custom:['custom']};
   const AI_PROVIDER_NAMES={'flox-mini':'Flox Mini',flox:'Flox',floxzert:'Flox Mini',gemini:'Gemini',openai:'OpenAI',anthropic:'Anthropic',deepseek:'DeepSeek',custom:'OpenAI-compatible'};
@@ -3073,6 +3087,25 @@
     }
   };
   $('accountModeToggle').onclick=()=>setAccountMode(accountMode==='register'?'login':'register');
+  document.querySelectorAll('.provider-button[data-provider]').forEach(button=>{
+    const provider=button.dataset.provider,name=OAUTH_NAMES[provider],available=Boolean(cloudApiBase)&&!desktopLocalAI&&floxConfig.oauth!==false;
+    button.disabled=!available;
+    button.textContent=available?`Войти через ${name}`:`${name} · только в веб-версии`;
+    button.onclick=async()=>{
+      button.disabled=true;
+      try{
+        let providers=null;
+        try{const response=await fetch('/api/auth/providers');if(response.ok)providers=await response.json()}catch(error){console.warn('OAuth providers request failed',error)}
+        if(!providers)throw new Error(`Сервер пока не поддерживает вход через ${name}: на backend нужны /api/auth/providers и /api/auth/oauth/${provider}/start (см. README)`);
+        if(!providers[provider])throw new Error(`${name} не настроен на сервере: добавьте ключи ${name} в переменные окружения backend`);
+        const state=Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('');
+        sessionStorage.setItem('floxzert-oauth-state',state);
+        location.assign(`${cloudApiBase}/api/auth/oauth/${provider}/start?return_to=${encodeURIComponent(location.origin+location.pathname)}&state=${state}`);
+      }catch(error){
+        notify(error.message);$('accountStatus').textContent=error.message;button.disabled=false;
+      }
+    };
+  });
   $('accountLogout').onclick=async()=>{
     const button=$('accountLogout');
     button.disabled=true;
@@ -3259,6 +3292,7 @@
   window.addEventListener('blur',()=>{activeShortcutContext='global';clearPendingShortcutStates()});
   window.addEventListener('beforeunload',()=>{if(projectDirty){try{localStorage.setItem('floxzert-project',JSON.stringify(projectData()))}catch(error){console.error('Emergency local save failed',error)}}});
   renderLayers();renderTimeline();render();applyZoom();renderFeatureCatalog();renderLearning();initializeProjectStorage().finally(()=>{if(!cloudApiBase)initializeMultiplayerIdentity();if(desktopLocalAI)void refreshDesktopLocalAIStatus();loadAiProvider()});
+if(oauthReturnMessage)setTimeout(()=>{notify(oauthReturnMessage);if(!localStorage.getItem('floxzert-cloud-token')&&$('accountStatus'))$('accountStatus').textContent=oauthReturnMessage},400);
   setInterval(()=>{
     if(!apiReady||!currentProjectId||saveInFlight||projectDirty||saveBlocked||document.hidden)return;
     fetch(`/api/projects/${encodeURIComponent(currentProjectId)}`).then(response=>response.json()).then(project=>{
