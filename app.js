@@ -2905,7 +2905,8 @@
     const list=$('learningChecklist');
     if(!list)return;
     const steps=[
-      'Выбрать инструмент','Нарисовать фигуру','Скопировать кадр','Изменить заливку','Изменить прозрачность','Размыть объект','Попробовать Ctrl+ЛКМ'
+      'Выбрать инструмент','Нарисовать фигуру','Скопировать кадр','Изменить заливку','Изменить прозрачность','Размыть объект','Попробовать Ctrl+ЛКМ',
+      'Стереть ластиком','Залить фигуру','Провести линию','Создать эллипс','Создать многоугольник или звезду','Добавить текст','Выделить лассо','Взять цвет пипеткой','Настроить градиент','Добавить тень','Скруглить углы','Создать слой','Сгруппировать объекты','Сохранить деталь в библиотеку','Отменить действие','Включить сетку','Изменить масштаб','Добавить кадр','Создать ключевой кадр','Запустить motion tween','Включить onion skin','Запустить предпросмотр','Экспортировать PNG','Открыть настройки','Открыть ИИ-ассистента','Открыть сообщество','Создать аккаунт или войти'
     ];
     list.replaceChildren();
     const progress=JSON.parse(localStorage.getItem('floxzert-learning')||'{}');
@@ -3027,6 +3028,7 @@
     };
     localStorage.setItem('floxzert-account',JSON.stringify(profile));
     localStorage.setItem('floxzert-guest','false');
+    enterAccount();
     $('accountName').value=profile.name;
     $('accountStatus').textContent=`Вход выполнен: ${profile.name||profile.email} · облачная синхронизация включена`;
     $('accountPassword').value='';$('accountPasswordConfirm').value='';
@@ -3068,6 +3070,7 @@
     };
     localStorage.setItem('floxzert-account',JSON.stringify(profile));
     localStorage.setItem('floxzert-guest','false');
+    enterAccount();
     updateAiAccess();
     loadAiProvider();
     if(apiReady&&!cloudApiBase){
@@ -3146,13 +3149,70 @@
   $('paletteSearch').oninput=()=>{paletteIndex=0;renderCommandPalette()};
   $('paletteModal').addEventListener('pointerdown',event=>{if(event.target===$('paletteModal'))$('paletteModal').classList.add('hidden')});
   document.querySelectorAll('.panel-tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.panel-tab').forEach(x=>x.classList.toggle('active',x===b));['properties','layers','assets'].forEach(x=>$(`${x}View`).classList.toggle('hidden',b.dataset.panel!==x))});
-  const onboardingSteps=[
-    {selector:'[data-tool="brush"]',title:'Кисть и рисование',description:'Выберите кисть в левой панели и проведите мышью или стилусом по холсту.'},
-    {selector:'#copyFrame',title:'Копирование кадра',description:'Кнопка копирования кадра переносит текущее содержимое на следующий кадр.'},
-    {selector:'#fillEnabled',title:'Заливка и прозрачность',description:'Включите заливку и настройте непрозрачность для объекта или активного слоя.'},
-    {selector:'[data-tool="blur"]',title:'Размытие объекта',description:'Выберите инструмент размытия, затем кликните по нужному объекту.'},
-    {selector:'#artboard',title:'Мультивыделение',description:'Зажмите Ctrl или Cmd и последовательно кликните по элементам, которые нужно выделить вместе.'}
+  const TOUR_STEPS=[
+    ['#artboard','Холст','Это ваша сцена: всё нарисованное живёт здесь. Рисуйте мышью, пальцем или стилусом. Размер и цвет фона меняются в панели «Свойства».'],
+    ['[data-tool="select"]','Выделение и перемещение (V)','Кликните по объекту, чтобы выбрать его, затем перетащите, растяните за маркеры или поверните. Ctrl или Cmd + клик добавляет объекты к выделению.'],
+    ['[data-tool="brush"]','Кисть (B)','Свободное рисование плавной линией. Размер и нажим настраиваются в панели свойств; стилус реагирует на силу нажатия.'],
+    ['[data-tool="pencil"]','Карандаш (N)','Тонкая точная линия для эскизов и контуров. Набросайте форму карандашом, а потом доработайте кистью.'],
+    ['[data-tool="eraser"]','Ластик (E)','Стирает рисунок под курсором. Если стёрли лишнее, нажмите Ctrl+Z, и всё вернётся.'],
+    ['[data-tool="fill"]','Заливка (G)','Кликните по фигуре или области, чтобы закрасить её выбранным цветом заливки.'],
+    ['[data-tool="line"]','Линия (L)','Тяните от точки к точке. Удерживайте Shift, чтобы угол зафиксировался (0°, 45°, 90°) и линия вышла ровной.'],
+    ['[data-tool="rect"]','Прямоугольник (R)','Тяните по холсту, чтобы создать фигуру. Shift делает стороны равными, и получается квадрат. Вариант со скруглёнными углами находится рядом.'],
+    ['[data-tool="ellipse"]','Эллипс (O)','Рисуется как прямоугольник. С зажатым Shift получается идеальный круг.'],
+    ['[data-tool="polygon"]','Многоугольники и звёзды','Выберите многоугольник, треугольник или звезду и тяните по холсту. Количество углов и скругление настраиваются в свойствах.'],
+    ['[data-tool="text"]','Текст (T)','Кликните по холсту и напечатайте надпись. Шрифт, размер и цвет меняются в панели свойств.'],
+    ['[data-tool="lasso"]','Лассо','Обведите объекты свободной линией, чтобы выделить их вместе, даже если они лежат вперемешку.'],
+    ['[data-tool="eyedropper"]','Пипетка','Кликните по любому месту холста, и его цвет станет текущим. Так легко подобрать точно такой же оттенок.'],
+    ['[data-tool="blur"]','Размытие','Выберите инструмент и кликните по объекту, и он станет мягким. Силу задаёт радиус размытия в свойствах.'],
+    ['#colorPickerButton','Цвета','Здесь выбираются цвета обводки и заливки. Меняйте цвет перед рисованием или у выделенного объекта: изменение применится сразу.'],
+    ['#fillEnabled','Заливка и обводка','Включайте и отключайте заливку объекта. Толщина и стиль обводки (сплошная, пунктир) настраиваются рядом.'],
+    ['#objectOpacity','Прозрачность','Делает объект полупрозрачным: удобно для теней, дымки и стекла. У слоя есть собственная прозрачность.'],
+    ['#gradientEnabled','Градиенты, тени и углы','Градиент плавно переходит между цветами: выберите тип, угол и остановки. Тень добавляет объём, а радиус скругления смягчает углы фигур.'],
+    ['[data-panel="layers"]','Слои','Слой это отдельная прозрачная плёнка. Меняйте порядок и прозрачность слоёв, чтобы рисовать, не задевая остальное.'],
+    ['#groupLayers','Группы','Объедините объекты в группу, чтобы двигать, поворачивать и менять размер всех сразу. Разгруппировать можно в любой момент.'],
+    ['[data-panel="assets"]','Библиотека деталей','Выделите объекты, дайте набору имя и сохраните. Потом добавляйте деталь в любую сцену одним кликом.'],
+    ['#undoButton','Отмена и повтор','Ctrl+Z отменяет последнее действие, Ctrl+Shift+Z или Ctrl+Y возвращает его. Можно смело экспериментировать.'],
+    ['#gridToggle','Сетка и привязка','Сетка помогает выровнять объекты. Включите привязку, и фигуры со штрихами будут прилипать к узлам; шаг сетки меняется рядом.'],
+    ['#zoomIn','Масштаб','Приближайте холст для тонкой работы и отдаляйте, чтобы увидеть всю сцену. Кнопка вписывания возвращает холст целиком.'],
+    ['#addFrame','Кадры','Анимация это последовательность кадров. Добавьте кадр, измените рисунок, и в предпросмотре кадры сменят друг друга.'],
+    ['#copyFrame','Копирование кадра','Переносит содержимое текущего кадра на следующий. Сдвигайте детали понемногу, и движение получится плавным.'],
+    ['#addLayerKeyframe','Ключевые кадры','Ключевой кадр фиксирует состояние слоя: положение, размер, поворот. Между ключевыми кадрами движение можно достроить автоматически.'],
+    ['#createMotionTween','Motion tween и easing','Автоматически рисует промежуточные кадры между ключевыми. Кривая easing определяет, едет ли объект равномерно, с разгоном или с торможением.'],
+    ['#onionButton','Onion skin','Показывает бледные копии соседних кадров: видно, откуда движется объект, и рисовать плавнее.'],
+    ['#playButton','Предпросмотр','Запускает анимацию. Скорость, зацикливание и диапазон повтора настраиваются рядом с таймлайном.'],
+    ['#smoothingEnabled','Сглаживание Flox','Распознаёт простые формы и выравнивает дрожащие линии. Работает прямо в браузере, без нейросети и без отправки данных.'],
+    ['#canvasHint','Подсказки и команды','Нажмите ? для подсказок. Ctrl+K открывает командную палитру: введите название действия и выполните его, не ища кнопку.'],
+    ['#exportTop','Экспорт PNG','Скачивает текущую сцену картинкой. Масштаб экспорта от 1× до 4× делает изображение крупнее и чётче.'],
+    ['#downloadProject','Сохранение проекта','Проект сохраняется в браузере автоматически. Кнопка .flosk скачивает его файлом, который можно импортировать обратно.'],
+    ['#settingsButton','Настройки','Темы и акцентные цвета, каталог дополнительных функций, горячие клавиши с переназначением, чек-лист обучения и аккаунт с облачной синхронизацией.'],
+    ['#openAssistant','ИИ-ассистент','Подсказывает по рисованию и работе в редакторе. Память заполняется только после того, как вы явно сохраните ответ.'],
+    ['#openSocial','Сообщество и справка','В «Сообществе» проекты, друзья и общий тулбокс. В «Справке» ответы на частые вопросы. Это обучение можно повторить в «Настройки» → «Обучение».']
   ];
+  const onboardingSteps=TOUR_STEPS.map(([selector,title,description])=>({selector,title,description}));
+  const LEARN_AUTO=[
+    ['[data-tool="eraser"]','Стереть ластиком'],['[data-tool="fill"]','Залить фигуру'],['[data-tool="line"]','Провести линию'],
+    ['[data-tool="ellipse"]','Создать эллипс'],['[data-tool="polygon"],[data-tool="star"],[data-tool="triangle"]','Создать многоугольник или звезду'],
+    ['[data-tool="text"]','Добавить текст'],['[data-tool="lasso"]','Выделить лассо'],['[data-tool="eyedropper"]','Взять цвет пипеткой'],
+    ['#gradientEnabled','Настроить градиент'],['#shadowEnabled','Добавить тень'],['#cornerRadius','Скруглить углы'],
+    ['#addLayer','Создать слой'],['#groupLayers','Сгруппировать объекты'],['#saveCurrentAsset,#saveAsset','Сохранить деталь в библиотеку'],
+    ['#undoButton','Отменить действие'],['#gridToggle','Включить сетку'],['#zoomIn,#zoomOut,#fitCanvas','Изменить масштаб'],
+    ['#addFrame','Добавить кадр'],['#addLayerKeyframe,#addBlankKeyframe','Создать ключевой кадр'],['#createMotionTween','Запустить motion tween'],
+    ['#onionButton','Включить onion skin'],['#playButton','Запустить предпросмотр'],['#exportTop','Экспортировать PNG'],
+    ['#settingsButton','Открыть настройки'],['#openAssistant','Открыть ИИ-ассистента'],['#openSocial','Открыть сообщество']
+  ];
+  ['click','input'].forEach(type=>document.addEventListener(type,event=>{LEARN_AUTO.forEach(([selector,label])=>{if(event.target.closest&&event.target.closest(selector))markLearningComplete(label)})},true));
+  function enterAccount(){
+    localStorage.setItem('floxzert-welcome','seen');
+    clearTourHighlights();
+    ['welcomeModal','settingsModal'].forEach(id=>{if($(id))$(id).classList.add('hidden')});
+    markLearningComplete('Создать аккаунт или войти');
+  }
+  if($('tourSkip'))$('tourSkip').onclick=()=>finishTour();
+  if(cloudApiBase&&!desktopLocalAI){
+    if($('openLocalAccount'))$('openLocalAccount').textContent='Войти или зарегистрироваться';
+    const welcomeText=document.querySelector('#welcomeContent p');
+    if(welcomeText)welcomeText.textContent='Войдите, чтобы проекты синхронизировались между устройствами, или продолжите как гость. Это окно показывается только один раз.';
+  }
   let tourIndex=-1;
   function clearTourHighlights(){document.querySelectorAll('.tour-highlight').forEach(element=>element.classList.remove('tour-highlight'))}
   function showTourStep(index){
@@ -3172,7 +3232,7 @@
   }
   if($('continueGuest'))$('continueGuest').onclick=()=>{localStorage.setItem('floxzert-guest','true');updateAiAccess();showTourStep(0)};
   if($('openLocalAccount'))$('openLocalAccount').onclick=()=>{$('welcomeModal').classList.add('hidden');$('settingsModal').classList.remove('hidden');document.querySelector('[data-settings-tab="account"]').click()};
-  if($('restartGuide'))$('restartGuide').onclick=()=>{$('settingsModal').classList.add('hidden');localStorage.removeItem('floxzert-welcome');$('welcomeContent').classList.remove('hidden');$('tourPanel').classList.add('hidden');$('welcomeModal').classList.remove('hidden')};
+  if($('restartGuide'))$('restartGuide').onclick=()=>{$('settingsModal').classList.add('hidden');$('welcomeContent').classList.remove('hidden');$('tourPanel').classList.add('hidden');$('welcomeModal').classList.remove('hidden')};
   $('tourBack').onclick=()=>showTourStep(tourIndex-1);
   $('tourNext').onclick=()=>{if(tourIndex>=onboardingSteps.length-1)finishTour();else showTourStep(tourIndex+1)};
   function initializeAccountOnboarding(){
@@ -3206,6 +3266,7 @@
             localStorage.removeItem('floxzert-cloud-token');
             setAccountMode('register');
             $('accountStatus').textContent='Сеанс истёк. Войдите снова для облачной синхронизации.';
+            $('settingsModal').classList.remove('hidden');document.querySelector('[data-settings-tab="account"]')?.click();
             return;
           }
           if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);
@@ -3302,7 +3363,9 @@ if(oauthReturnMessage)setTimeout(()=>{notify(oauthReturnMessage);if(!localStorag
       }
     }).catch(error=>console.warn('Collaboration poll failed',error));
   },5000);
-  if(!localStorage.getItem('floxzert-welcome'))$('welcomeModal').classList.remove('hidden');
+  const hasSession=Boolean(localStorage.getItem('floxzert-cloud-token'))||(localStorage.getItem('floxzert-guest')==='false'&&Boolean(localStorage.getItem('floxzert-account')));
+  if(!hasSession&&!localStorage.getItem('floxzert-welcome'))$('welcomeModal').classList.remove('hidden');
+  localStorage.setItem('floxzert-welcome','seen');
   const savedProfile=JSON.parse(localStorage.getItem('floxzert-account')||'null');
   if(savedProfile&&!cloudApiBase){$('accountEmail').value=savedProfile.email||'';$('accountName').value=savedProfile.name||'';$('accountLanguage').value=savedProfile.language||'ru';$('accountStatus').textContent=`Локальный профиль: ${savedProfile.name||savedProfile.email||'без имени'} · облачная синхронизация отключена`}
   if(settings.theme)applyTheme(settings.theme);
